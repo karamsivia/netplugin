@@ -31,12 +31,14 @@ func createPolicy(ctx *cli.Context) {
 	argCheck(1, ctx)
 
 	tenant := ctx.String("tenant")
+	policyType := ctx.String("policyType") //SRTE - policyType
 	policy := ctx.Args()[0]
 
 	logrus.Infof("Creating policy %s:%s", tenant, policy)
 
 	errCheck(ctx, getClient(ctx).PolicyPost(&contivClient.Policy{
 		PolicyName: policy,
+		PolicyType: policyType,
 		TenantName: tenant,
 	}))
 }
@@ -143,6 +145,7 @@ func addRule(ctx *cli.Context) {
 		Protocol:          ctx.String("protocol"),
 		Port:              ctx.Int("port"),
 		Action:            ctx.String("action"),
+		Sla:               ctx.Int("sla"),
 	}))
 }
 

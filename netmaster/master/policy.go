@@ -54,7 +54,7 @@ func PolicyAttach(epg *contivModel.EndpointGroup, policy *contivModel.Policy) er
 	}
 
 	// Create the epg policy
-	gp, err := mastercfg.NewEpgPolicy(epgpKey, epg.EndpointGroupID, policy)
+	gp, err := mastercfg.NewEpgPolicy(epgpKey, epg.EndpointGroupID, epg.NetworkName, policy) //SRTE
 	if err != nil {
 		log.Errorf("Error creating EPG policy. Err: %v", err)
 		return err
@@ -95,6 +95,10 @@ func PolicyDetach(epg *contivModel.EndpointGroup, policy *contivModel.Policy) er
 		if err != nil {
 			log.Errorf("Error deleting rule %s from epg polict %s. Err: %v", ruleKey, epgpKey, err)
 		}
+	}
+	err := gp.DetachPolicy(epgpKey) //SRTE
+	if err != nil {
+		log.Errorf("Error deleting  epg polict %s. Err: %v", epgpKey, err)
 	}
 
 	// delete it

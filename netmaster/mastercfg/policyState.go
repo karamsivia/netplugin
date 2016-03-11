@@ -79,7 +79,11 @@ func NewEpgPolicy(epgpKey string, epgID int, policy *contivModel.Policy) (*EpgPo
 	gp.StateDriver = stateStore
 
 	log.Infof("Creating new epg policy: %s", epgpKey)
-
+	err1 := gp.AttachPolicy(gp.EndpointGroupID, policy.PolicyType, policy.TenantName, epgpKey) //SRTE - Add TE policy info
+	if err1 != nil {
+		log.Errorf("Error adding policy %s. Err: %v", epgpKey, err1)
+		return nil, err1
+	}
 	// init the dbs
 	gp.RuleMaps = make(map[string]*RuleMap)
 
@@ -304,6 +308,43 @@ func (gp *EpgPolicy) createOfnetRule(rule *contivModel.Rule, dir string) (*ofnet
 	log.Infof("Added rule {%+v} to policyDB", ofnetRule)
 
 	return ofnetRule, nil
+}
+
+//AttachPolicy - SRTE
+func (gp *EpgPolicy) AttachPolicy(endptgpID int, policyType string, tenantName string, policykey string) error {
+	if ( policyType == "TEPolicy" ) { 
+
+		ofnetPolicy := new(ofnet.OfnetPolicy)
+		ofnetPolicy.EndptgpID = endptgpID
+		ofnetPolicy.PolicyId = policykey
+		ofnetPolicy.PolicyType = policyType
+	
+		
+		// Add the Rule to policyDB
+		err := ofnetMaster.AttachPolicy(ofnetPolicy)
+		if err != nil {
+			log.Errorf("Error attaching policy  {%+v}. Err: %v", endptgpID, err)
+			return err
+		}
+
+		log.Infof("Attached policy {%+v} ", endptgpID)
+	}
+
+	return  nil
+}
+
+// DetachPolicy detach a  epg policy - SRTE
+func (gp *EpgPolicy) DetachPolicy(epgPolicyKey string ) error {
+
+
+	// Delete the rule from policyDB
+	err := ofnetMaster.DetachPolicy(epgPolicyKey)
+	if err != nil {
+		log.Errorf("Error deleting the ofnet rule {%+v}. Err: %v", epgPolicyKey, err)
+	}
+	
+
+	return nil
 }
 
 // AddRule adds a rule to epg policy
