@@ -165,6 +165,7 @@ func (self *etcdPlugin) WatchService(name string,
 
 	// handle messages from watch service
 	go func() {
+	restart:
 		for {
 			select {
 			case watchResp := <-watchCh:
@@ -172,10 +173,23 @@ func (self *etcdPlugin) WatchService(name string,
 
 				// derive service info from key
 				srvKey := strings.TrimPrefix(watchResp.Node.Key, "/contiv.io/service/")
-				srvName := strings.Split(srvKey, "/")[0]
-				hostInfo := strings.Split(srvKey, "/")[1]
-				hostAddr := strings.Split(hostInfo, ":")[0]
-				portNum, _ := strconv.Atoi(strings.Split(hostInfo, ":")[1])
+				parts := strings.Split(srvKey, "/")
+				if len(parts) < 2 {
+					log.Warnf("Recieved event for key %q, could not parse service key", srvKey)
+					goto restart
+				}
+
+				srvName := parts[0]
+				hostAddr := parts[1]
+
+				parts = strings.Split(hostAddr, ":")
+				if len(parts) != 2 {
+					log.Warnf("Recieved event for key %q, could not parse hostinfo", srvKey)
+					goto restart
+				}
+
+				hostAddr = parts[0]
+				portNum, _ := strconv.Atoi(parts[1])
 
 				// Build service info
 				srvInfo := ServiceInfo{
@@ -256,7 +270,13 @@ func refreshService(client *etcd.Client, keyName string, keyVal string, stopChan
 
 			_, err := client.Update(keyName, keyVal, SERVICE_TTL)
 			if err != nil {
-				log.Errorf("Error updating key %s, Err: %v", keyName, err)
+				log.Warnf("Error updating key %s, Err: %v", keyName, err)
+				// In case of a TTL expiry, this key may have been deleted
+				// from the etcd db. Hence use of Set instead of Update
+				_, err := client.Set(keyName, keyVal, SERVICE_TTL)
+				if err != nil {
+					log.Errorf("Error setting key %s, Err: %v", keyName, err)
+				}
 			}
 
 		case <-stopChan:

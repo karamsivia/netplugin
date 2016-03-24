@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"log"
 	"net"
+
 	"github.com/shaleman/libOpenflow/util"
 )
 
@@ -168,11 +169,13 @@ func (m *MatchField) UnmarshalBinary(data []byte) error {
 func DecodeMatchField(class uint16, field uint8, data []byte) util.Message {
 	if class == OXM_CLASS_OPENFLOW_BASIC {
 		var val util.Message
+		val = nil
 		switch field {
 		case OXM_FIELD_IN_PORT:
 			val = new(InPortField)
 		case OXM_FIELD_IN_PHY_PORT:
 		case OXM_FIELD_METADATA:
+			val = new(MetadataField)
 		case OXM_FIELD_ETH_DST:
 			val = new(EthDstField)
 		case OXM_FIELD_ETH_SRC:
@@ -203,6 +206,7 @@ func DecodeMatchField(class uint16, field uint8, data []byte) util.Message {
 		case OXM_FIELD_ICMPV4_TYPE:
 		case OXM_FIELD_ICMPV4_CODE:
 		case OXM_FIELD_ARP_OP:
+			val = new(ArpOperField)
 		case OXM_FIELD_ARP_SPA:
 		case OXM_FIELD_ARP_TPA:
 		case OXM_FIELD_ARP_SHA:
@@ -226,12 +230,33 @@ func DecodeMatchField(class uint16, field uint8, data []byte) util.Message {
 		case OXM_FIELD_IPV6_EXTHDR:
 		case OXM_FIELD_TCP_FLAGS:
 			val = new(TcpFlagsField)
+		default:
+			log.Printf("Unhandled Field: %d in Class: %d", field, class)
+		}
+
+		if val == nil {
+			log.Printf("Bad pkt class: %v field: %v data: %v", class, field, data)
+			return nil
+		}
+
+		val.UnmarshalBinary(data)
+		return val
+	} else if class == OXM_CLASS_NXM_1 {
+		var val util.Message
+		switch field {
+		case NXM_NX_TUN_IPV4_SRC:
+			val = new(TunnelIpv4SrcField)
+		case NXM_NX_TUN_IPV4_DST:
+			val = new(TunnelIpv4DstField)
+		default:
+			log.Printf("Unhandled Field: %d in Class: %d", field, class)
+			return nil
 		}
 
 		val.UnmarshalBinary(data)
 		return val
 	} else {
-		log.Panic("Unsupported match field class")
+		log.Panic("Unsupported match field: %d in class: %d", field, class)
 	}
 
 	return nil
@@ -294,6 +319,48 @@ const (
 	OXM_FIELD_IPV6_EXTHDR    = 39 /* IPv6 Extension Header pseudo-field */
 	OXM_FIELD_PBB_UCA        = 41 /* PBB UCA header field (from OpenFlow 1.4) */
 	OXM_FIELD_TCP_FLAGS      = 42 /* TCP flags (from OpenFlow 1.5) */
+)
+
+const (
+	NXM_NX_REG0          = 0
+	NXM_NX_REG1          = 1
+	NXM_NX_REG2          = 2
+	NXM_NX_REG3          = 3
+	NXM_NX_REG4          = 4
+	NXM_NX_REG5          = 5
+	NXM_NX_REG6          = 6
+	NXM_NX_REG7          = 7
+	NXM_NX_TUN_ID        = 16
+	NXM_NX_ARP_SHA       = 17
+	NXM_NX_ARP_THA       = 18
+	NXM_NX_IPV6_SRC      = 19
+	NXM_NX_IPV6_DST      = 20
+	NXM_NX_ICMPV6_TYPE   = 21
+	NXM_NX_ICMPV6_CODE   = 22
+	NXM_NX_ND_TARGET     = 23
+	NXM_NX_ND_SLL        = 24
+	NXM_NX_ND_TLL        = 25
+	NXM_NX_IP_FRAG       = 26
+	NXM_NX_IPV6_LABEL    = 27
+	NXM_NX_IP_ECN        = 28
+	NXM_NX_IP_TTL        = 29
+	NXM_NX_MPLS_TTL      = 30
+	NXM_NX_TUN_IPV4_SRC  = 31
+	NXM_NX_TUN_IPV4_DST  = 32
+	NXM_NX_PKT_MARK      = 33
+	NXM_NX_TCP_FLAGS     = 34
+	NXM_NX_DP_HASH       = 35
+	NXM_NX_RECIRC_ID     = 36
+	NXM_NX_CONJ_ID       = 37
+	NXM_NX_TUN_GBP_ID    = 38
+	NXM_NX_TUN_GBP_FLAGS = 39
+	NXM_NX_TUN_FLAGS     = 104
+	NXM_NX_CT_STATE      = 105
+	NXM_NX_CT_ZONE       = 106
+	NXM_NX_CT_MARK       = 107
+	NXM_NX_CT_LABEL      = 108
+	NXM_NX_TUN_IPV6_SRC  = 109
+	NXM_NX_TUN_IPV6_DST  = 110
 )
 
 // IN_PORT field
@@ -473,7 +540,7 @@ func (m *VlanIdField) UnmarshalBinary(data []byte) error {
 }
 
 // Return a MatchField for vlan id matching
-func NewVlanIdField(vlanId uint16, mask bool) *MatchField {
+func NewVlanIdField(vlanId uint16, vlanMask *uint16) *MatchField {
 	f := new(MatchField)
 	f.Class = OXM_CLASS_OPENFLOW_BASIC
 	f.Field = OXM_FIELD_VLAN_VID
@@ -484,14 +551,13 @@ func NewVlanIdField(vlanId uint16, mask bool) *MatchField {
 	f.Value = vlanIdField
 	f.Length = uint8(vlanIdField.Len())
 	
-	if mask == true { 
+	if vlanMask != nil  { 
 		mask := new(VlanIdField)
-		mask.VlanId = OFPVID_PRESENT
+		mask.VlanId = *vlanMask
 		f.Mask = mask
 		f.HasMask = true
 		f.Length += uint8(mask.Len())
 	}
-
 	return f
 }
 
@@ -563,7 +629,6 @@ func NewMplsBosField(mplsBos uint8) *MatchField {
 	f.Length = uint8(mplsBosField.Len())
 	return f
 }
-
 
 // IPV4_SRC field
 type Ipv4SrcField struct {
@@ -883,5 +948,122 @@ func NewTcpFlagsField(tcpFlag uint16, tcpFlagMask *uint16) *MatchField {
 	return f
 }
 
-// FIXME: Need to add following fields
-// ARP_OP
+// ARP Oper type field
+type ArpOperField struct {
+	ArpOper uint16
+}
+
+func (m *ArpOperField) Len() uint16 {
+	return 2
+}
+func (m *ArpOperField) MarshalBinary() (data []byte, err error) {
+	data = make([]byte, 2)
+
+	binary.BigEndian.PutUint16(data, m.ArpOper)
+	return
+}
+func (m *ArpOperField) UnmarshalBinary(data []byte) error {
+	m.ArpOper = binary.BigEndian.Uint16(data)
+	return nil
+}
+
+// Return a MatchField for arp operation type matching
+func NewArpOperField(arpOper uint16) *MatchField {
+	f := new(MatchField)
+	f.Class = OXM_CLASS_OPENFLOW_BASIC
+	f.Field = OXM_FIELD_ARP_OP
+	f.HasMask = false
+
+	arpOperField := new(ArpOperField)
+	arpOperField.ArpOper = arpOper
+	f.Value = arpOperField
+	f.Length = uint8(arpOperField.Len())
+
+	return f
+}
+
+// Tunnel IPv4 Src field
+type TunnelIpv4SrcField struct {
+	TunnelIpv4Src net.IP
+}
+
+func (m *TunnelIpv4SrcField) Len() uint16 {
+	return 4
+}
+func (m *TunnelIpv4SrcField) MarshalBinary() (data []byte, err error) {
+	data = make([]byte, 4)
+	copy(data, m.TunnelIpv4Src.To4())
+	return
+}
+
+func (m *TunnelIpv4SrcField) UnmarshalBinary(data []byte) error {
+	m.TunnelIpv4Src = net.IPv4(data[0], data[1], data[2], data[3])
+	return nil
+}
+
+// Return a MatchField for tunnel ipv4 src addr
+func NewTunnelIpv4SrcField(tunnelIpSrc net.IP, tunnelIpSrcMask *net.IP) *MatchField {
+	f := new(MatchField)
+	f.Class = OXM_CLASS_NXM_1
+	f.Field = NXM_NX_TUN_IPV4_SRC
+	f.HasMask = false
+
+	tunnelIpSrcField := new(TunnelIpv4SrcField)
+	tunnelIpSrcField.TunnelIpv4Src = tunnelIpSrc
+	f.Value = tunnelIpSrcField
+	f.Length = uint8(tunnelIpSrcField.Len())
+
+	// Add the mask
+	if tunnelIpSrcMask != nil {
+		mask := new(TunnelIpv4SrcField)
+		mask.TunnelIpv4Src = *tunnelIpSrcMask
+		f.Mask = mask
+		f.HasMask = true
+		f.Length += uint8(mask.Len())
+	}
+
+	return f
+}
+
+// Tunnel IPv4 Dst field
+type TunnelIpv4DstField struct {
+	TunnelIpv4Dst net.IP
+}
+
+func (m *TunnelIpv4DstField) Len() uint16 {
+	return 4
+}
+func (m *TunnelIpv4DstField) MarshalBinary() (data []byte, err error) {
+	data = make([]byte, 4)
+	copy(data, m.TunnelIpv4Dst.To4())
+	return
+}
+
+func (m *TunnelIpv4DstField) UnmarshalBinary(data []byte) error {
+	m.TunnelIpv4Dst = net.IPv4(data[0], data[1], data[2], data[3])
+	return nil
+}
+
+// Return a MatchField for tunnel ipv4 dst addr
+func NewTunnelIpv4DstField(tunnelIpDst net.IP, tunnelIpDstMask *net.IP) *MatchField {
+	f := new(MatchField)
+	f.Class = OXM_CLASS_NXM_1
+	f.Field = NXM_NX_TUN_IPV4_DST
+	f.HasMask = false
+
+	tunnelIpDstField := new(TunnelIpv4DstField)
+	tunnelIpDstField.TunnelIpv4Dst = tunnelIpDst
+	f.Value = tunnelIpDstField
+	f.Length = uint8(tunnelIpDstField.Len())
+
+	// Add the mask
+	if tunnelIpDstMask != nil {
+		mask := new(TunnelIpv4DstField)
+		mask.TunnelIpv4Dst = *tunnelIpDstMask
+		f.Mask = mask
+		f.HasMask = true
+		f.Length += uint8(mask.Len())
+	}
+
+	return f
+}

@@ -39,7 +39,7 @@
 		},
 		{
 			"ImportPath": "github.com/contiv/contivmodel",
-			"Rev": "9c4fa80c5e7b0a4d8583fa9824c0fe799c114c4c"
+			"Rev": "e96dfafd17ecab8cd6ab3ffc1dd39a86344b101e"
 		},
 		{
 			"ImportPath": "github.com/contiv/go-etcd/etcd",
@@ -53,11 +53,19 @@
 		},
 		{
 			"ImportPath": "github.com/contiv/objdb",
-			"Rev": "5011dbe58063428677719109a949fbc55c589417"
+			"Rev": "26ca13052130613588a9b1a3a1691b7b59f41103"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet",
-			"Rev": "8a0129d9a27ba57e1f20354453180544afe657e6"
+			"Rev": "eb47c65bff01b5bc926a0c86f002c3e00f0d4651"
+		},
+		{
+			"ImportPath": "github.com/contiv/systemtests-utils",
+			"Rev": "912796a0a1310b462f441bbe7f4140da781d0548"
+		},
+		{
+			"ImportPath": "github.com/contiv/vagrantssh",
+			"Rev": "772f193af15fb2f70b5b054edf195c80ec566034"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/etcdserver/etcdhttp/httptypes",
@@ -192,19 +200,19 @@
 		},
 		{
 			"ImportPath": "github.com/shaleman/libOpenflow/common",
-			"Rev": "cb1496185a815d2d7b4eafab3bae29d8c6fc8ac1"
+			"Rev": "a0fe038945ccf5c6d3e949d1607f0d47dc64ef60"
 		},
 		{
 			"ImportPath": "github.com/shaleman/libOpenflow/openflow13",
-			"Rev": "cb1496185a815d2d7b4eafab3bae29d8c6fc8ac1"
+			"Rev": "a0fe038945ccf5c6d3e949d1607f0d47dc64ef60"
 		},
 		{
 			"ImportPath": "github.com/shaleman/libOpenflow/protocol",
-			"Rev": "cb1496185a815d2d7b4eafab3bae29d8c6fc8ac1"
+			"Rev": "a0fe038945ccf5c6d3e949d1607f0d47dc64ef60"
 		},
 		{
 			"ImportPath": "github.com/shaleman/libOpenflow/util",
-			"Rev": "cb1496185a815d2d7b4eafab3bae29d8c6fc8ac1"
+			"Rev": "a0fe038945ccf5c6d3e949d1607f0d47dc64ef60"
 		},
 		{
 			"ImportPath": "github.com/stretchr/testify/assert",
@@ -214,6 +222,10 @@
 		{
 			"ImportPath": "github.com/vishvananda/netlink",
 			"Rev": "4b5dce31de6d42af5bb9811c6d265472199e0fec"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh",
+			"Rev": "cc04154d65fb9296747569b107cfd05380b1ea3e"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
@@ -232,8 +244,16 @@
 			"Rev": "195180cfebf7362bd243a52477697895128c8777"
 		},
 		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "342d6a85aa15bcd2ec54803cdffe90d52b6f35a7"
+		},
+		{
 			"ImportPath": "google.golang.org/grpc",
 			"Rev": "a202995ce9a99c7d65875ba9f0cf04ff43169dd5"
+		},
+		{
+			"ImportPath": "gopkg.in/check.v1",
+			"Rev": "11d3bc7aa68e238947792f30573146a3231fc0f1"
 		},
 		{
 			"ImportPath": "gopkg.in/tomb.v2",
