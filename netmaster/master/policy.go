@@ -54,7 +54,7 @@ func PolicyAttach(epg *contivModel.EndpointGroup, policy *contivModel.Policy) er
 	}
 
 	// Create the epg policy
-	gp, err := mastercfg.NewEpgPolicy(epgpKey, epg.EndpointGroupID, epg.NetworkName, policy) //SRTE
+	gp, err := mastercfg.NewEpgPolicy(epgpKey, epg.EndpointGroupID,  policy) //SRTE
 	if err != nil {
 		log.Errorf("Error creating EPG policy. Err: %v", err)
 		return err
