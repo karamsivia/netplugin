@@ -255,8 +255,8 @@ var Commands = []cli.Command{
 					},
 					cli.StringFlag{
 						Name:  "sla, S",
-						Usage: "High level SLA to dest( 0 - shortest path, 1 - lowest latency, 2 - highest bandwidth)",
-						Value: "0",
+						Usage: "High level SLA to dest( sp - shortest path, ll - lowest latency, hb - highest bandwidth)",
+						Value: "sp",
 					},
 				},
 				Action: addRule,

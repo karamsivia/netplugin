@@ -12,6 +12,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	contivClient "github.com/contiv/contivmodel/client"
+	log "github.com/Sirupsen/logrus"
 	"github.com/contiv/netplugin/version"
 )
 
@@ -129,7 +130,15 @@ func addRule(ctx *cli.Context) {
 	} else {
 		errExit(ctx, exitHelp, "Unknown direction", false)
 	}
-
+	log.Infof("SLAAAA: %+v",  ctx.String("sla"))
+	sla := 0x1000
+	if ctx.String("sla") == "ll" {
+		sla = 0x1000
+	} else  if ctx.String("sla") == "sp" {
+                sla = 0x1001
+        } else  if ctx.String("sla") == "hb" {
+                sla = 0x1002
+        } 
 	errCheck(ctx, getClient(ctx).RulePost(&contivClient.Rule{
 		TenantName:        ctx.String("tenant"),
 		PolicyName:        ctx.Args()[0],
@@ -145,7 +154,7 @@ func addRule(ctx *cli.Context) {
 		Protocol:          ctx.String("protocol"),
 		Port:              ctx.Int("port"),
 		Action:            ctx.String("action"),
-		Sla:               ctx.Int("sla"),
+		Sla:               sla,
 	}))
 }
 
