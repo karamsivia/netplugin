@@ -160,7 +160,14 @@ var Commands = []cli.Command{
 				Name:      "create",
 				Usage:     "Create a new policy",
 				ArgsUsage: "[policy]",
-				Flags:     []cli.Flag{tenantFlag},
+				Flags:     []cli.Flag{
+					tenantFlag,
+					cli.StringFlag{
+						Name:  "policyType, p",
+						Usage: "Policy Type - SecPolicy, TEPolicy",
+						Value: "SecPolicy",
+					},
+				},
 				Action:    createPolicy,
 			},
 			{
@@ -243,8 +250,13 @@ var Commands = []cli.Command{
 					},
 					cli.StringFlag{
 						Name:  "action, j",
-						Usage: "Action to take (allow or deny)",
+						Usage: "Action to take (allow , deny or sla)",
 						Value: "allow",
+					},
+					cli.StringFlag{
+						Name:  "sla, S",
+						Usage: "High level SLA to dest( 0 - shortest path, 1 - lowest latency, 2 - highest bandwidth)",
+						Value: "0",
 					},
 				},
 				Action: addRule,
