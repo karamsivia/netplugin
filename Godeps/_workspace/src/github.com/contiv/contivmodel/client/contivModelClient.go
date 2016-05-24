@@ -245,6 +245,7 @@ type Policy struct {
 	Key string `json:"key,omitempty"`
 
 	PolicyName string `json:"policyName,omitempty"` // Policy Name
+	PolicyType string `json:"policyType,omitempty"` // Policy Type- SRTE
 	TenantName string `json:"tenantName,omitempty"` // Tenant Name
 
 	// add link-sets and links
@@ -266,6 +267,7 @@ type Rule struct {
 	Key string `json:"key,omitempty"`
 
 	Action            string `json:"action,omitempty"`            // Action
+	Sla               int    `json:"sla,omitempty"`               // SRTE - Sla 
 	Direction         string `json:"direction,omitempty"`         // Direction
 	FromEndpointGroup string `json:"fromEndpointGroup,omitempty"` // From Endpoint Group
 	FromIpAddress     string `json:"fromIpAddress,omitempty"`     // IP Address
