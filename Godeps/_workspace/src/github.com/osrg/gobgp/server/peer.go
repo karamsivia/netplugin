@@ -18,6 +18,7 @@ package server
 import (
 	"encoding/json"
 	log "github.com/Sirupsen/logrus"
+	"github.com/eapache/channels"
 	api "github.com/osrg/gobgp/api"
 	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet"
@@ -32,196 +33,208 @@ const (
 )
 
 type Peer struct {
-	gConf           config.Global
-	conf            config.Neighbor
-	fsm             *FSM
-	rfMap           map[bgp.RouteFamily]bool
-	capMap          map[bgp.BGPCapabilityCode][]bgp.ParameterCapabilityInterface
-	adjRib          *table.AdjRib
-	outgoing        chan *bgp.BGPMessage
-	inPolicies      []*table.Policy
-	defaultInPolicy table.RouteType
-	accepted        uint32
-	staleAccepted   bool
-	recvOpen        *bgp.BGPMessage
-	localRib        *table.TableManager
+	tableId   string
+	gConf     config.Global
+	conf      config.Neighbor
+	fsm       *FSM
+	adjRibIn  *table.AdjRib
+	adjRibOut *table.AdjRib
+	outgoing  chan *bgp.BGPMessage
+	policy    *table.RoutingPolicy
+	localRib  *table.TableManager
 }
 
-func NewPeer(g config.Global, conf config.Neighbor, loc *table.TableManager) *Peer {
+func NewPeer(g config.Global, conf config.Neighbor, loc *table.TableManager, policy *table.RoutingPolicy) *Peer {
 	peer := &Peer{
 		gConf:    g,
 		conf:     conf,
-		rfMap:    make(map[bgp.RouteFamily]bool),
-		capMap:   make(map[bgp.BGPCapabilityCode][]bgp.ParameterCapabilityInterface),
 		outgoing: make(chan *bgp.BGPMessage, 128),
 		localRib: loc,
+		policy:   policy,
 	}
-	conf.NeighborState.SessionState = uint32(bgp.BGP_FSM_IDLE)
-	conf.Timers.TimersState.Downtime = time.Now().Unix()
-	peer.adjRib = table.NewAdjRib(peer.configuredRFlist())
-	peer.fsm = NewFSM(&g, &conf, peer)
+	tableId := table.GLOBAL_RIB_NAME
+	if peer.isRouteServerClient() {
+		tableId = conf.Config.NeighborAddress
+	}
+	peer.tableId = tableId
+	conf.State.SessionState = config.IntToSessionStateMap[int(bgp.BGP_FSM_IDLE)]
+	conf.Timers.State.Downtime = time.Now().Unix()
+	rfs, _ := config.AfiSafis(conf.AfiSafis).ToRfList()
+	peer.adjRibIn = table.NewAdjRib(peer.ID(), rfs, g.Collector.Enabled)
+	peer.adjRibOut = table.NewAdjRib(peer.ID(), rfs, g.Collector.Enabled)
+	peer.fsm = NewFSM(&g, &conf, policy)
 	return peer
 }
 
-func (peer *Peer) Fsm() *FSM {
-	return peer.fsm
+func (peer *Peer) ID() string {
+	return peer.conf.Config.NeighborAddress
 }
 
-func (peer *Peer) Outgoing() chan *bgp.BGPMessage {
-	return peer.outgoing
+func (peer *Peer) TableID() string {
+	return peer.tableId
 }
 
 func (peer *Peer) isIBGPPeer() bool {
-	return peer.conf.NeighborConfig.PeerAs == peer.gConf.GlobalConfig.As
+	return peer.conf.Config.PeerAs == peer.gConf.Config.As
 }
 
 func (peer *Peer) isRouteServerClient() bool {
-	return peer.conf.RouteServer.RouteServerConfig.RouteServerClient
+	return peer.conf.RouteServer.Config.RouteServerClient
 }
 
 func (peer *Peer) isRouteReflectorClient() bool {
-	return peer.conf.RouteReflector.RouteReflectorConfig.RouteReflectorClient
+	return peer.conf.RouteReflector.Config.RouteReflectorClient
+}
+
+func (peer *Peer) isGracefulRestartEnabled() bool {
+	return peer.fsm.pConf.GracefulRestart.State.Enabled
+}
+
+func (peer *Peer) recvedAllEOR() bool {
+	for _, a := range peer.fsm.pConf.AfiSafis {
+		if s := a.MpGracefulRestart.State; s.Enabled && !s.EndOfRibReceived {
+			return false
+		}
+	}
+	return true
 }
 
 func (peer *Peer) configuredRFlist() []bgp.RouteFamily {
-	return peer.localRib.GetRFlist()
+	rfs, _ := config.AfiSafis(peer.conf.AfiSafis).ToRfList()
+	return rfs
 }
 
-func (peer *Peer) updateAccepted(accepted uint32) {
-	peer.accepted = accepted
-	peer.staleAccepted = false
+func (peer *Peer) forwardingPreservedFamilies() ([]bgp.RouteFamily, []bgp.RouteFamily) {
+	list := []bgp.RouteFamily{}
+	for _, a := range peer.fsm.pConf.AfiSafis {
+		if s := a.MpGracefulRestart.State; s.Enabled && s.Received {
+			f, _ := bgp.GetRouteFamily(string(a.AfiSafiName))
+			list = append(list, f)
+		}
+	}
+	preserved := []bgp.RouteFamily{}
+	notPreserved := []bgp.RouteFamily{}
+	for _, f := range peer.configuredRFlist() {
+		p := true
+		for _, g := range list {
+			if f == g {
+				p = false
+				preserved = append(preserved, f)
+			}
+		}
+		if p {
+			notPreserved = append(notPreserved, f)
+		}
+	}
+	return preserved, notPreserved
 }
 
 func (peer *Peer) getAccepted(rfList []bgp.RouteFamily) []*table.Path {
-	var pathList []*table.Path
-	for _, path := range peer.adjRib.GetInPathList(rfList) {
-		if path.Filtered == false {
-			pathList = append(pathList, path)
-		}
-	}
-	return pathList
+	return peer.adjRibIn.PathList(rfList, true)
 }
 
 func (peer *Peer) getBestFromLocal(rfList []bgp.RouteFamily) ([]*table.Path, []*table.Path) {
-	pathList, filtered := peer.ApplyPolicy(table.POLICY_DIRECTION_EXPORT, filterpath(peer, peer.localRib.GetBestPathList(rfList)))
-	if peer.isRouteServerClient() == false {
-		for _, path := range pathList {
-			path.UpdatePathAttrs(&peer.gConf, &peer.conf)
+	pathList := []*table.Path{}
+	filtered := []*table.Path{}
+	options := &table.PolicyOptions{
+		Neighbor: peer.fsm.peerInfo.Address,
+	}
+	var source []*table.Path
+	if peer.gConf.Collector.Enabled {
+		source = peer.localRib.GetPathList(peer.TableID(), rfList)
+	} else {
+		source = peer.localRib.GetBestPathList(peer.TableID(), rfList)
+	}
+	for _, path := range source {
+		p := peer.policy.ApplyPolicy(peer.TableID(), table.POLICY_DIRECTION_EXPORT, filterpath(peer, path), options)
+		if p == nil {
+			filtered = append(filtered, path)
+			continue
+		}
+		if !peer.gConf.Collector.Enabled && !peer.isRouteServerClient() {
+			p = p.Clone(p.IsWithdraw)
+			p.UpdatePathAttrs(&peer.gConf, &peer.conf)
+		}
+		pathList = append(pathList, p)
+	}
+	if peer.isGracefulRestartEnabled() {
+		for _, family := range rfList {
+			pathList = append(pathList, table.NewEOR(family))
 		}
 	}
 	return pathList, filtered
 }
 
-func open2Cap(open *bgp.BGPOpen, n *config.Neighbor) (map[bgp.BGPCapabilityCode][]bgp.ParameterCapabilityInterface, map[bgp.RouteFamily]bool) {
-	capMap := make(map[bgp.BGPCapabilityCode][]bgp.ParameterCapabilityInterface)
-	rfMap := config.CreateRfMap(n)
-	r := make(map[bgp.RouteFamily]bool)
-	for _, p := range open.OptParams {
-		if paramCap, y := p.(*bgp.OptionParameterCapability); y {
-			for _, c := range paramCap.Capability {
-				m, ok := capMap[c.Code()]
-				if !ok {
-					m = make([]bgp.ParameterCapabilityInterface, 0, 1)
-				}
-				capMap[c.Code()] = append(m, c)
-
-				if c.Code() == bgp.BGP_CAP_MULTIPROTOCOL {
-					m := c.(*bgp.CapMultiProtocol)
-					r[m.CapValue] = true
-				}
-			}
-		}
-	}
-
-	for rf, _ := range rfMap {
-		if _, y := r[rf]; !y {
-			delete(rfMap, rf)
-		}
-	}
-	return capMap, rfMap
-}
-
-func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, bool, []*bgp.BGPMessage) {
+func (peer *Peer) handleBGPmessage(e *FsmMsg) ([]*table.Path, []*bgp.BGPMessage, []bgp.RouteFamily) {
 	m := e.MsgData.(*bgp.BGPMessage)
-	bgpMsgList := []*bgp.BGPMessage{}
-	pathList := []*table.Path{}
 	log.WithFields(log.Fields{
 		"Topic": "Peer",
-		"Key":   peer.conf.NeighborConfig.NeighborAddress,
+		"Key":   peer.conf.Config.NeighborAddress,
 		"data":  m,
 	}).Debug("received")
-	update := false
+	eor := []bgp.RouteFamily{}
 
 	switch m.Header.Type {
-	case bgp.BGP_MSG_OPEN:
-		peer.recvOpen = m
-		body := m.Body.(*bgp.BGPOpen)
-		peer.capMap, peer.rfMap = open2Cap(body, &peer.conf)
-
-		// calculate HoldTime
-		// RFC 4271 P.13
-		// a BGP speaker MUST calculate the value of the Hold Timer
-		// by using the smaller of its configured Hold Time and the Hold Time
-		// received in the OPEN message.
-		holdTime := float64(body.HoldTime)
-		myHoldTime := peer.conf.Timers.TimersConfig.HoldTime
-		if holdTime > myHoldTime {
-			peer.fsm.negotiatedHoldTime = myHoldTime
-		} else {
-			peer.fsm.negotiatedHoldTime = holdTime
-		}
-
 	case bgp.BGP_MSG_ROUTE_REFRESH:
 		rr := m.Body.(*bgp.BGPRouteRefresh)
 		rf := bgp.AfiSafiToRouteFamily(rr.AFI, rr.SAFI)
-		if _, ok := peer.rfMap[rf]; !ok {
+		if _, ok := peer.fsm.rfMap[rf]; !ok {
 			log.WithFields(log.Fields{
 				"Topic": "Peer",
-				"Key":   peer.conf.NeighborConfig.NeighborAddress,
+				"Key":   peer.conf.Config.NeighborAddress,
 				"Data":  rf,
 			}).Warn("Route family isn't supported")
 			break
 		}
-		if _, ok := peer.capMap[bgp.BGP_CAP_ROUTE_REFRESH]; ok {
+		if _, ok := peer.fsm.capMap[bgp.BGP_CAP_ROUTE_REFRESH]; ok {
 			rfList := []bgp.RouteFamily{rf}
-			peer.adjRib.DropOut(rfList)
+			peer.adjRibOut.Drop(rfList)
 			accepted, filtered := peer.getBestFromLocal(rfList)
-			peer.adjRib.UpdateOut(accepted)
-			pathList = append(pathList, accepted...)
+			peer.adjRibOut.Update(accepted)
 			for _, path := range filtered {
 				path.IsWithdraw = true
-				pathList = append(pathList, path)
+				accepted = append(accepted, path)
 			}
+			return nil, table.CreateUpdateMsgFromPaths(accepted), eor
 		} else {
 			log.WithFields(log.Fields{
 				"Topic": "Peer",
-				"Key":   peer.conf.NeighborConfig.NeighborAddress,
+				"Key":   peer.conf.Config.NeighborAddress,
 			}).Warn("ROUTE_REFRESH received but the capability wasn't advertised")
 		}
 
 	case bgp.BGP_MSG_UPDATE:
-		update = true
-		peer.conf.Timers.TimersState.UpdateRecvTime = time.Now().Unix()
+		peer.conf.Timers.State.UpdateRecvTime = time.Now().Unix()
 		if len(e.PathList) > 0 {
-			pathList = e.PathList
-			peer.staleAccepted = true
-			peer.adjRib.UpdateIn(pathList)
+			peer.adjRibIn.Update(e.PathList)
+			paths := make([]*table.Path, 0, len(e.PathList))
+			for _, path := range e.PathList {
+				if path.IsEOR() {
+					family := path.GetRouteFamily()
+					log.WithFields(log.Fields{
+						"Topic":         "Peer",
+						"Key":           peer.conf.Config.NeighborAddress,
+						"AddressFamily": family,
+					}).Debug("EOR received")
+					eor = append(eor, family)
+					continue
+				}
+				if path.Filtered(peer.ID()) != table.POLICY_DIRECTION_IN {
+					paths = append(paths, path)
+				}
+			}
+			return paths, nil, eor
 		}
-	case bgp.BGP_MSG_NOTIFICATION:
-		body := m.Body.(*bgp.BGPNotification)
-		log.WithFields(log.Fields{
-			"Topic":   "Peer",
-			"Key":     peer.conf.NeighborConfig.NeighborAddress,
-			"Code":    body.ErrorCode,
-			"Subcode": body.ErrorSubcode,
-			"Data":    body.Data,
-		}).Warn("received notification")
 	}
-	return pathList, update, bgpMsgList
+	return nil, nil, eor
 }
 
-func (peer *Peer) startFSMHandler(incoming chan *FsmMsg) {
-	peer.fsm.h = NewFSMHandler(peer.fsm, incoming, peer.outgoing)
+func (peer *Peer) startFSMHandler(incoming *channels.InfiniteChannel, stateCh chan *FsmMsg) {
+	peer.fsm.h = NewFSMHandler(peer.fsm, incoming, stateCh, peer.outgoing)
+}
+
+func (peer *Peer) StaleAll(rfList []bgp.RouteFamily) {
+	peer.adjRibIn.StaleAll(rfList)
 }
 
 func (peer *Peer) PassConn(conn *net.TCPConn) {
@@ -231,7 +244,7 @@ func (peer *Peer) PassConn(conn *net.TCPConn) {
 		conn.Close()
 		log.WithFields(log.Fields{
 			"Topic": "Peer",
-			"Key":   peer.conf.NeighborConfig.NeighborAddress,
+			"Key":   peer.conf.Config.NeighborAddress,
 		}).Warn("accepted conn is closed to avoid be blocked")
 	}
 }
@@ -245,15 +258,15 @@ func (peer *Peer) ToApiStruct() *api.Peer {
 	f := peer.fsm
 	c := f.pConf
 
-	remoteCap := make([][]byte, 0, len(peer.capMap))
-	for _, c := range peer.capMap {
+	remoteCap := make([][]byte, 0, len(peer.fsm.capMap))
+	for _, c := range peer.fsm.capMap {
 		for _, m := range c {
 			buf, _ := m.Serialize()
 			remoteCap = append(remoteCap, buf)
 		}
 	}
 
-	caps := capabilitiesFromConfig(&peer.gConf, &peer.conf)
+	caps := capabilitiesFromConfig(&peer.conf)
 	localCap := make([][]byte, 0, len(caps))
 	for _, c := range caps {
 		buf, _ := c.Serialize()
@@ -261,67 +274,54 @@ func (peer *Peer) ToApiStruct() *api.Peer {
 	}
 
 	conf := &api.PeerConf{
-		NeighborAddress:  c.NeighborConfig.NeighborAddress.String(),
+		NeighborAddress:  c.Config.NeighborAddress,
 		Id:               peer.fsm.peerInfo.ID.To4().String(),
-		PeerAs:           c.NeighborConfig.PeerAs,
-		LocalAs:          c.NeighborConfig.LocalAs,
-		PeerType:         uint32(c.NeighborConfig.PeerType),
-		AuthPassword:     c.NeighborConfig.AuthPassword,
-		RemovePrivateAs:  uint32(c.NeighborConfig.RemovePrivateAs),
-		RouteFlapDamping: c.NeighborConfig.RouteFlapDamping,
-		SendCommunity:    uint32(c.NeighborConfig.SendCommunity),
-		Description:      c.NeighborConfig.Description,
-		PeerGroup:        c.NeighborConfig.PeerGroup,
+		PeerAs:           c.Config.PeerAs,
+		LocalAs:          c.Config.LocalAs,
+		PeerType:         uint32(c.Config.PeerType.ToInt()),
+		AuthPassword:     c.Config.AuthPassword,
+		RemovePrivateAs:  uint32(c.Config.RemovePrivateAs.ToInt()),
+		RouteFlapDamping: c.Config.RouteFlapDamping,
+		SendCommunity:    uint32(c.Config.SendCommunity.ToInt()),
+		Description:      c.Config.Description,
+		PeerGroup:        c.Config.PeerGroup,
 		RemoteCap:        remoteCap,
 		LocalCap:         localCap,
 	}
 
-	timer := &c.Timers
-	s := &c.NeighborState
+	timer := c.Timers
+	s := c.State
 
-	advertized := uint32(0)
+	advertised := uint32(0)
 	received := uint32(0)
 	accepted := uint32(0)
 	if f.state == bgp.BGP_FSM_ESTABLISHED {
 		rfList := peer.configuredRFlist()
-		advertized = uint32(peer.adjRib.GetOutCount(rfList))
-		received = uint32(peer.adjRib.GetInCount(rfList))
-		if peer.staleAccepted {
-			accepted = uint32(len(peer.getAccepted(rfList)))
-			peer.updateAccepted(accepted)
-		} else {
-			accepted = peer.accepted
-		}
+		advertised = uint32(peer.adjRibOut.Count(rfList))
+		received = uint32(peer.adjRibIn.Count(rfList))
+		accepted = uint32(peer.adjRibIn.Accepted(rfList))
 	}
 
 	uptime := int64(0)
-	if timer.TimersState.Uptime != 0 {
-		uptime = int64(time.Now().Sub(time.Unix(timer.TimersState.Uptime, 0)).Seconds())
+	if timer.State.Uptime != 0 {
+		uptime = timer.State.Uptime
 	}
 	downtime := int64(0)
-	if timer.TimersState.Downtime != 0 {
-		downtime = int64(time.Now().Sub(time.Unix(timer.TimersState.Downtime, 0)).Seconds())
-	}
-
-	keepalive := uint32(0)
-	if f.negotiatedHoldTime != 0 {
-		if f.negotiatedHoldTime < timer.TimersConfig.HoldTime {
-			keepalive = uint32(f.negotiatedHoldTime / 3)
-		} else {
-			keepalive = uint32(timer.TimersConfig.KeepaliveInterval)
-		}
+	if timer.State.Downtime != 0 {
+		downtime = timer.State.Downtime
 	}
 
 	timerconf := &api.TimersConfig{
-		ConnectRetry:                 uint64(timer.TimersConfig.ConnectRetry),
-		HoldTime:                     uint64(timer.TimersConfig.HoldTime),
-		KeepaliveInterval:            uint64(keepalive),
-		MinimumAdvertisementInterval: uint64(timer.TimersConfig.MinimumAdvertisementInterval),
+		ConnectRetry:      uint64(timer.Config.ConnectRetry),
+		HoldTime:          uint64(timer.Config.HoldTime),
+		KeepaliveInterval: uint64(timer.Config.KeepaliveInterval),
 	}
 
 	timerstate := &api.TimersState{
-		Uptime:   uint64(uptime),
-		Downtime: uint64(downtime),
+		KeepaliveInterval:  uint64(timer.State.KeepaliveInterval),
+		NegotiatedHoldTime: uint64(timer.State.NegotiatedHoldTime),
+		Uptime:             uint64(uptime),
+		Downtime:           uint64(downtime),
 	}
 
 	apitimer := &api.Timers{
@@ -356,7 +356,7 @@ func (peer *Peer) ToApiStruct() *api.Peer {
 		Messages:   msg,
 		Received:   received,
 		Accepted:   accepted,
-		Advertized: advertized,
+		Advertised: advertised,
 	}
 
 	return &api.Peer{
@@ -366,90 +366,7 @@ func (peer *Peer) ToApiStruct() *api.Peer {
 	}
 }
 
-func (peer *Peer) GetPolicy(d table.PolicyDirection) []*table.Policy {
-	switch d {
-	case table.POLICY_DIRECTION_IN:
-		return peer.inPolicies
-	default:
-		return peer.localRib.GetPolicy(d)
-	}
-	return nil
-}
-
-func (peer *Peer) SetPolicy(d table.PolicyDirection, policies []*table.Policy) error {
-	switch d {
-	case table.POLICY_DIRECTION_IN:
-		peer.inPolicies = policies
-	default:
-		return peer.localRib.SetPolicy(d, policies)
-	}
-	return nil
-}
-
-func (peer *Peer) GetDefaultPolicy(d table.PolicyDirection) table.RouteType {
-	switch d {
-	case table.POLICY_DIRECTION_IN:
-		return peer.defaultInPolicy
-	default:
-		return peer.localRib.GetDefaultPolicy(d)
-	}
-	return table.ROUTE_TYPE_NONE
-}
-
-func (peer *Peer) SetDefaultPolicy(d table.PolicyDirection, typ table.RouteType) error {
-	switch d {
-	case table.POLICY_DIRECTION_IN:
-		peer.defaultInPolicy = typ
-	default:
-		if peer.isRouteServerClient() {
-			return peer.localRib.SetDefaultPolicy(d, typ)
-		}
-	}
-	return nil
-}
-
-func (peer *Peer) ApplyPolicy(d table.PolicyDirection, paths []*table.Path) ([]*table.Path, []*table.Path) {
-	newpaths := make([]*table.Path, 0, len(paths))
-	filteredPaths := make([]*table.Path, 0)
-	for _, path := range paths {
-		result := table.ROUTE_TYPE_NONE
-		newpath := path
-		for _, p := range peer.GetPolicy(d) {
-			result, newpath = p.Apply(path)
-			if result != table.ROUTE_TYPE_NONE {
-				break
-			}
-		}
-
-		if result == table.ROUTE_TYPE_NONE {
-			result = peer.GetDefaultPolicy(d)
-		}
-
-		switch result {
-		case table.ROUTE_TYPE_ACCEPT:
-			if d == table.POLICY_DIRECTION_IN {
-				path.Filtered = false
-			}
-			newpaths = append(newpaths, newpath)
-		case table.ROUTE_TYPE_REJECT:
-			if d == table.POLICY_DIRECTION_IN {
-				path.Filtered = true
-			}
-			filteredPaths = append(filteredPaths, path)
-			log.WithFields(log.Fields{
-				"Topic":     "Peer",
-				"Key":       peer.conf.NeighborConfig.NeighborAddress,
-				"Path":      path,
-				"Direction": d,
-			}).Debug("reject")
-		}
-	}
-	return newpaths, filteredPaths
-}
-
 func (peer *Peer) DropAll(rfList []bgp.RouteFamily) {
-	peer.adjRib.DropIn(rfList)
-	peer.adjRib.DropOut(rfList)
-	peer.staleAccepted = false
-	peer.accepted = 0
+	peer.adjRibIn.Drop(rfList)
+	peer.adjRibOut.Drop(rfList)
 }

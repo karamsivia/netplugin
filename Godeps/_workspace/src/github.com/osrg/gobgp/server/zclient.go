@@ -16,7 +16,9 @@
 package server
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet"
 	"github.com/osrg/gobgp/table"
 	"github.com/osrg/gobgp/zebra"
@@ -127,8 +129,8 @@ func createPathFromIPRouteMessage(m *zebra.Message, peerInfo *table.PeerInfo) *t
 	med := bgp.NewPathAttributeMultiExitDisc(body.Metric)
 	pattr = append(pattr, med)
 
-	p := table.NewPath(peerInfo, nlri, isWithdraw, pattr, false, time.Now(), false)
-	p.IsFromZebra = true
+	p := table.NewPath(peerInfo, nlri, isWithdraw, pattr, time.Now(), false)
+	p.SetIsFromExternal(true)
 	return p
 }
 
@@ -151,16 +153,41 @@ func handleZapiMsg(msg *zebra.Message, server *BgpServer) []*SenderMsg {
 	switch b := msg.Body.(type) {
 	case *zebra.IPRouteBody:
 		pi := &table.PeerInfo{
-			AS:      server.bgpConfig.Global.GlobalConfig.As,
-			LocalID: server.bgpConfig.Global.GlobalConfig.RouterId,
+			AS:      server.bgpConfig.Global.Config.As,
+			LocalID: net.ParseIP(server.bgpConfig.Global.Config.RouterId).To4(),
 		}
 
 		if b.Prefix != nil && len(b.Nexthops) > 0 && b.Type != zebra.ROUTE_KERNEL {
 			p := createPathFromIPRouteMessage(msg, pi)
-			msgs := server.propagateUpdate(nil, []*table.Path{p})
+			msgs, _ := server.propagateUpdate(nil, []*table.Path{p})
 			return msgs
 		}
 	}
 
 	return nil
+}
+
+func NewZclient(url string, redistRouteTypes []config.InstallProtocolType) (*zebra.Client, error) {
+	l := strings.SplitN(url, ":", 2)
+	if len(l) != 2 {
+		return nil, fmt.Errorf("unsupported url: %s", url)
+	}
+	cli, err := zebra.NewClient(l[0], l[1], zebra.ROUTE_BGP)
+	if err != nil {
+		return nil, err
+	}
+	cli.SendHello()
+	cli.SendRouterIDAdd()
+	cli.SendInterfaceAdd()
+	for _, typ := range redistRouteTypes {
+		t, err := zebra.RouteTypeFromString(string(typ))
+		if err != nil {
+			return nil, err
+		}
+		cli.SendRedistribute(t)
+	}
+	if e := cli.SendCommand(zebra.REDISTRIBUTE_DEFAULT_ADD, nil); e != nil {
+		return nil, e
+	}
+	return cli, nil
 }

@@ -16,9 +16,10 @@
 package server
 
 import (
-	"fmt"
+	"bytes"
 	log "github.com/Sirupsen/logrus"
 	"github.com/osrg/gobgp/packet"
+	"github.com/osrg/gobgp/table"
 	"gopkg.in/tomb.v2"
 	"net"
 	"os"
@@ -42,6 +43,7 @@ const (
 	WATCHER_BMP
 	WATCHER_ZEBRA
 	WATCHER_GRPC_BESTPATH
+	WATCHER_GRPC_INCOMING
 )
 
 type watcherEventType uint8
@@ -51,6 +53,7 @@ const (
 	WATCHER_EVENT_UPDATE_MSG
 	WATCHER_EVENT_STATE_CHANGE
 	WATCHER_EVENT_BESTPATH_CHANGE
+	WATCHER_EVENT_POST_POLICY_UPDATE_MSG
 )
 
 type watcherEvent interface {
@@ -62,20 +65,33 @@ type watcherEventUpdateMsg struct {
 	localAS      uint32
 	peerAddress  net.IP
 	localAddress net.IP
+	peerID       net.IP
 	fourBytesAs  bool
 	timestamp    time.Time
 	payload      []byte
+	postPolicy   bool
+	pathList     []*table.Path
+}
+
+type watcherEventStateChangedMsg struct {
+	peerAS       uint32
+	localAS      uint32
+	peerAddress  net.IP
+	localAddress net.IP
+	peerPort     uint16
+	localPort    uint16
+	peerID       net.IP
+	sentOpen     *bgp.BGPMessage
+	recvOpen     *bgp.BGPMessage
+	state        bgp.FSMState
+	timestamp    time.Time
 }
 
 type watcher interface {
 	notify(watcherEventType) chan watcherEvent
 	restart(string) error
 	stop()
-}
-
-type mrtWatcherOp struct {
-	filename string //used for rotate
-	result   chan error
+	watchingEventTypes() []watcherEventType
 }
 
 type mrtWatcher struct {
@@ -83,7 +99,7 @@ type mrtWatcher struct {
 	filename string
 	file     *os.File
 	ch       chan watcherEvent
-	opCh     chan *mrtWatcherOp
+	interval uint64
 }
 
 func (w *mrtWatcher) notify(t watcherEventType) chan watcherEvent {
@@ -98,22 +114,28 @@ func (w *mrtWatcher) stop() {
 }
 
 func (w *mrtWatcher) restart(filename string) error {
-	adminOp := &mrtWatcherOp{
-		filename: filename,
-		result:   make(chan error),
-	}
-	select {
-	case w.opCh <- adminOp:
-	default:
-		return fmt.Errorf("already an admin operaiton in progress")
-	}
-	return <-adminOp.result
+	return nil
 }
 
 func (w *mrtWatcher) loop() error {
-	defer w.file.Close()
+	c := func() *time.Ticker {
+		if w.interval == 0 {
+			return &time.Ticker{}
+		}
+		return time.NewTicker(time.Second * time.Duration(w.interval))
+	}()
+
+	defer func() {
+		if w.file != nil {
+			w.file.Close()
+		}
+		if w.interval != 0 {
+			c.Stop()
+		}
+	}()
+
 	for {
-		write := func(ev watcherEvent) {
+		serialize := func(ev watcherEvent) ([]byte, error) {
 			m := ev.(*watcherEventUpdateMsg)
 			subtype := bgp.MESSAGE_AS4
 			mp := bgp.NewBGP4MPMessage(m.peerAS, m.localAS, 0, m.peerAddress.String(), m.localAddress.String(), m.fourBytesAs, nil)
@@ -127,70 +149,116 @@ func (w *mrtWatcher) loop() error {
 					"Topic": "mrt",
 					"Data":  m,
 				}).Warn(err)
-				return
+				return nil, err
 			}
-			buf, err := bm.Serialize()
-			if err == nil {
-				_, err = w.file.Write(buf)
-			}
-
-			if err != nil {
-				log.WithFields(log.Fields{
-					"Topic": "mrt",
-					"Data":  m,
-				}).Warn(err)
-			}
+			return bm.Serialize()
 		}
 
-		drain := func() {
+		drain := func(ev watcherEvent) {
+			events := make([]watcherEvent, 0, 1+len(w.ch))
+			if ev != nil {
+				events = append(events, ev)
+			}
+
 			for len(w.ch) > 0 {
-				m := <-w.ch
-				write(m)
+				e := <-w.ch
+				events = append(events, e)
 			}
-		}
 
-		select {
-		case <-w.t.Dying():
-			drain()
-			return nil
-		case m := <-w.ch:
-			write(m)
-		case adminOp := <-w.opCh:
-			var err error
-			if adminOp.filename != "" {
-				err = os.Rename(w.file.Name(), adminOp.filename)
-			}
-			if err == nil {
-				var file *os.File
-				file, err = mrtFileOpen(w.file.Name())
-				if err == nil {
-					w.file.Close()
-					w.file = file
+			w := func(buf []byte) {
+				if _, err := w.file.Write(buf); err == nil {
+					w.file.Sync()
+				} else {
+					log.WithFields(log.Fields{
+						"Topic": "mrt",
+						"Error": err,
+					}).Warn(err)
 				}
 			}
-			adminOp.result <- err
+
+			var b bytes.Buffer
+			for _, e := range events {
+				buf, err := serialize(e)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"Topic": "mrt",
+						"Data":  e,
+					}).Warn(err)
+					continue
+				}
+				b.Write(buf)
+				if b.Len() > 1*1000*1000 {
+					w(b.Bytes())
+					b.Reset()
+				}
+			}
+			if b.Len() > 0 {
+				w(b.Bytes())
+			}
+		}
+		select {
+		case <-w.t.Dying():
+			drain(nil)
+			return nil
+		case e := <-w.ch:
+			drain(e)
+		case <-c.C:
+			w.file.Close()
+			file, err := mrtFileOpen(w.filename, w.interval)
+			if err == nil {
+				w.file = file
+			} else {
+				log.Info("can't rotate mrt file", err)
+			}
 		}
 	}
 }
 
-func mrtFileOpen(filename string) (*os.File, error) {
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+func (w *mrtWatcher) watchingEventTypes() []watcherEventType {
+	return []watcherEventType{WATCHER_EVENT_UPDATE_MSG}
+}
+
+func mrtFileOpen(filename string, interval uint64) (*os.File, error) {
+	realname := filename
+	if interval != 0 {
+		realname = time.Now().Format(filename)
+	}
+
+	i := len(realname)
+	for i > 0 && os.IsPathSeparator(realname[i-1]) {
+		// skip trailing path separators
+		i--
+	}
+	j := i
+
+	for j > 0 && !os.IsPathSeparator(realname[j-1]) {
+		j--
+	}
+
+	if j > 0 {
+		if err := os.MkdirAll(realname[0:j-1], 0755); err != nil {
+			log.Warn(err)
+			return nil, err
+		}
+	}
+
+	file, err := os.OpenFile(realname, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	if err != nil {
 		log.Warn(err)
 	}
 	return file, err
 }
 
-func newMrtWatcher(filename string) (*mrtWatcher, error) {
-	file, err := mrtFileOpen(filename)
+func newMrtWatcher(dumpType int32, filename string, interval uint64) (*mrtWatcher, error) {
+	file, err := mrtFileOpen(filename, interval)
 	if err != nil {
 		return nil, err
 	}
 	w := mrtWatcher{
 		filename: filename,
 		file:     file,
-		ch:       make(chan watcherEvent),
-		opCh:     make(chan *mrtWatcherOp, 1),
+		ch:       make(chan watcherEvent, 1<<16),
+		interval: interval,
 	}
 	w.t.Go(w.loop)
 	return &w, nil

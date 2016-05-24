@@ -45,10 +45,13 @@ const (
 	REQ_MOD_NEIGHBOR
 	REQ_GLOBAL_RIB
 	REQ_MONITOR_GLOBAL_BEST_CHANGED
+	REQ_MONITOR_INCOMING
 	REQ_MONITOR_NEIGHBOR_PEER_STATE
+	REQ_MONITOR_ROA_VALIDATION_RESULT
 	REQ_MRT_GLOBAL_RIB
 	REQ_MRT_LOCAL_RIB
 	REQ_MOD_MRT
+	REQ_MOD_BMP
 	REQ_RPKI
 	REQ_MOD_RPKI
 	REQ_ROA
@@ -56,6 +59,7 @@ const (
 	REQ_VRFS
 	REQ_VRF_MOD
 	REQ_MOD_PATH
+	REQ_MOD_PATHS
 	REQ_DEFINED_SET
 	REQ_MOD_DEFINED_SET
 	REQ_STATEMENT
@@ -64,17 +68,20 @@ const (
 	REQ_MOD_POLICY
 	REQ_POLICY_ASSIGNMENT
 	REQ_MOD_POLICY_ASSIGNMENT
+	REQ_BMP_NEIGHBORS
+	REQ_BMP_GLOBAL
+	REQ_BMP_ADJ_IN
+	REQ_DEFERRAL_TIMER_EXPIRED
 )
-
-const GRPC_PORT = 8080
 
 type Server struct {
 	grpcServer  *grpc.Server
 	bgpServerCh chan *GrpcRequest
+	port        int
 }
 
 func (s *Server) Serve() error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", GRPC_PORT))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
@@ -153,9 +160,23 @@ func (s *Server) MonitorBestChanged(arg *api.Arguments, stream api.GobgpApi_Moni
 		return fmt.Errorf("unsupported resource type: %v", arg.Resource)
 	}
 
-	req := NewGrpcRequest(reqType, "", bgp.RouteFamily(arg.Rf), nil)
+	req := NewGrpcRequest(reqType, "", bgp.RouteFamily(arg.Family), nil)
 	s.bgpServerCh <- req
 
+	return handleMultipleResponses(req, func(res *GrpcResponse) error {
+		return stream.Send(res.Data.(*api.Destination))
+	})
+}
+
+func (s *Server) MonitorRib(arg *api.Table, stream api.GobgpApi_MonitorRibServer) error {
+	switch arg.Type {
+	case api.Resource_ADJ_IN:
+	default:
+		return fmt.Errorf("unsupported resource type: %v", arg.Type)
+	}
+
+	req := NewGrpcRequest(REQ_MONITOR_INCOMING, arg.Name, bgp.RouteFamily(arg.Family), arg)
+	s.bgpServerCh <- req
 	return handleMultipleResponses(req, func(res *GrpcResponse) error {
 		return stream.Send(res.Data.(*api.Destination))
 	})
@@ -171,9 +192,18 @@ func (s *Server) MonitorPeerState(arg *api.Arguments, stream api.GobgpApi_Monito
 	})
 }
 
+func (s *Server) MonitorROAValidation(arg *api.Arguments, stream api.GobgpApi_MonitorROAValidationServer) error {
+	req := NewGrpcRequest(REQ_MONITOR_ROA_VALIDATION_RESULT, "", bgp.RouteFamily(arg.Family), nil)
+	s.bgpServerCh <- req
+
+	return handleMultipleResponses(req, func(res *GrpcResponse) error {
+		return stream.Send(res.Data.(*api.ROAResult))
+	})
+}
+
 func (s *Server) neighbor(reqType int, arg *api.Arguments) (*api.Error, error) {
 	none := &api.Error{}
-	req := NewGrpcRequest(reqType, arg.Name, bgp.RouteFamily(arg.Rf), nil)
+	req := NewGrpcRequest(reqType, arg.Name, bgp.RouteFamily(arg.Family), nil)
 	s.bgpServerCh <- req
 
 	res := <-req.ResponseCh
@@ -212,7 +242,15 @@ func (s *Server) Disable(ctx context.Context, arg *api.Arguments) (*api.Error, e
 	return s.neighbor(REQ_NEIGHBOR_DISABLE, arg)
 }
 
-func (s *Server) ModPath(stream api.GobgpApi_ModPathServer) error {
+func (s *Server) ModPath(ctx context.Context, arg *api.ModPathArguments) (*api.ModPathResponse, error) {
+	d, err := s.get(REQ_MOD_PATH, arg)
+	if err != nil {
+		return nil, err
+	}
+	return d.(*api.ModPathResponse), nil
+}
+
+func (s *Server) ModPaths(stream api.GobgpApi_ModPathsServer) error {
 	for {
 		arg, err := stream.Recv()
 
@@ -226,7 +264,7 @@ func (s *Server) ModPath(stream api.GobgpApi_ModPathServer) error {
 			return fmt.Errorf("unsupported resource: %s", arg.Resource)
 		}
 
-		req := NewGrpcRequest(REQ_MOD_PATH, arg.Name, bgp.RouteFamily(0), arg)
+		req := NewGrpcRequest(REQ_MOD_PATHS, arg.Name, bgp.RouteFamily(0), arg)
 		s.bgpServerCh <- req
 
 		res := <-req.ResponseCh
@@ -252,7 +290,7 @@ func (s *Server) GetMrt(arg *api.MrtArguments, stream api.GobgpApi_GetMrtServer)
 	default:
 		return fmt.Errorf("unsupported resource type: %v", arg.Resource)
 	}
-	req := NewGrpcRequest(reqType, arg.NeighborAddress, bgp.RouteFamily(arg.Rf), arg.Interval)
+	req := NewGrpcRequest(reqType, arg.NeighborAddress, bgp.RouteFamily(arg.Family), arg.Interval)
 	s.bgpServerCh <- req
 	return handleMultipleResponses(req, func(res *GrpcResponse) error {
 		return stream.Send(res.Data.(*api.MrtMessage))
@@ -263,12 +301,16 @@ func (s *Server) ModMrt(ctx context.Context, arg *api.ModMrtArguments) (*api.Err
 	return s.mod(REQ_MOD_MRT, arg)
 }
 
+func (s *Server) ModBmp(ctx context.Context, arg *api.ModBmpArguments) (*api.Error, error) {
+	return s.mod(REQ_MOD_BMP, arg)
+}
+
 func (s *Server) ModRPKI(ctx context.Context, arg *api.ModRpkiArguments) (*api.Error, error) {
 	return s.mod(REQ_MOD_RPKI, arg)
 }
 
 func (s *Server) GetRPKI(arg *api.Arguments, stream api.GobgpApi_GetRPKIServer) error {
-	req := NewGrpcRequest(REQ_RPKI, "", bgp.RouteFamily(arg.Rf), nil)
+	req := NewGrpcRequest(REQ_RPKI, "", bgp.RouteFamily(arg.Family), nil)
 	s.bgpServerCh <- req
 
 	return handleMultipleResponses(req, func(res *GrpcResponse) error {
@@ -277,7 +319,7 @@ func (s *Server) GetRPKI(arg *api.Arguments, stream api.GobgpApi_GetRPKIServer) 
 }
 
 func (s *Server) GetROA(arg *api.Arguments, stream api.GobgpApi_GetROAServer) error {
-	req := NewGrpcRequest(REQ_ROA, arg.Name, bgp.RouteFamily(arg.Rf), nil)
+	req := NewGrpcRequest(REQ_ROA, arg.Name, bgp.RouteFamily(arg.Family), nil)
 	s.bgpServerCh <- req
 
 	return handleMultipleResponses(req, func(res *GrpcResponse) error {
@@ -443,6 +485,7 @@ func NewGrpcServer(port int, bgpServerCh chan *GrpcRequest) *Server {
 	server := &Server{
 		grpcServer:  grpcServer,
 		bgpServerCh: bgpServerCh,
+		port:        port,
 	}
 	api.RegisterGobgpApiServer(grpcServer, server)
 	return server
