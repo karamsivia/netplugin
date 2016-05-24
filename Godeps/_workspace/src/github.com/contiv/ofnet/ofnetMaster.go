@@ -196,6 +196,43 @@ func (self *OfnetMaster) EndpointDel(ep *OfnetEndpoint, ret *bool) error {
 	return nil
 }
 
+// AttachPolicy adds a new rule to the policyDB - SRTE
+func (self *OfnetMaster) AttachPolicy(ofnetPolicy *OfnetPolicy) error {
+
+	for _, node := range self.agentDb {
+		var resp bool
+
+		log.Infof("Sending attach policy:  to node %s:%d", node.HostAddr, node.HostPort)
+
+		client := rpcHub.Client(node.HostAddr, node.HostPort)
+		err := client.Call("PolicyAgent.AttachPolicy", ofnetPolicy, &resp)
+		if err != nil {
+			log.Errorf("Error attaching policy  to %s. Err: %v", node.HostAddr, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DetachPolicy deletes policy info from policyDB - SRTE
+func (self *OfnetMaster) DetachPolicy(epgPolicyKey string) error {
+
+	for _, node := range self.agentDb {
+		var resp bool
+
+		log.Infof("Sending detach policy:  to node %s:%d", node.HostAddr, node.HostPort)
+
+		client := rpcHub.Client(node.HostAddr, node.HostPort)
+		err := client.Call("PolicyAgent.DetachPolicy", epgPolicyKey, &resp)
+		if err != nil {
+			log.Errorf("Error detaching policy  to %s. Err: %v", node.HostAddr, err)
+			return err
+		}
+	}
+
+	return nil
+}
 // AddRule adds a new rule to the policyDB
 func (self *OfnetMaster) AddRule(rule *OfnetPolicyRule) error {
 	// Check if we have the rule already

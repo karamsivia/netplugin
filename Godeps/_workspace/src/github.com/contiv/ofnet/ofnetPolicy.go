@@ -42,9 +42,13 @@ type PolicyAgent struct {
 	ofSwitch    *ofctrl.OFSwitch        // openflow switch we are talking to
 	dstGrpTable *ofctrl.Table           // dest group lookup table
 	policyTable *ofctrl.Table           // Policy rule lookup table
+	tepolicyTable *ofctrl.Table           // Policy rule lookup table - SRTE
+	srmplsTable *ofctrl.Table           // Policy rule lookup table -SRTE
 	nextTable   *ofctrl.Table           // Next table to goto for accepted packets
 	Rules       map[string]*PolicyRule  // rules database
 	DstGrpFlow  map[string]*ofctrl.Flow // FLow entries for dst group lookup
+	SrMplsFlow  map[string]*ofctrl.Flow // FLow entries for srte srmpls 
+	Policys     map[string]*OfnetPolicy  // policy database - SRTE
 }
 
 // NewPolicyMgr Creates a new policy manager
@@ -54,7 +58,9 @@ func NewPolicyAgent(agent *OfnetAgent, rpcServ *rpc.Server) *PolicyAgent {
 	// initialize
 	policyAgent.agent = agent
 	policyAgent.Rules = make(map[string]*PolicyRule)
+	policyAgent.Policys = make(map[string]*OfnetPolicy) //SRTE
 	policyAgent.DstGrpFlow = make(map[string]*ofctrl.Flow)
+	policyAgent.SrMplsFlow = make(map[string]*ofctrl.Flow) //SRTE
 
 	// Register for Master add/remove events
 	rpcServ.Register(policyAgent)
@@ -114,6 +120,7 @@ func ruleIsSame(r1, r2 *OfnetPolicyRule) bool {
 
 // AddEndpoint adds an endpoint to dst group lookup
 func (self *PolicyAgent) AddEndpoint(endpoint *OfnetEndpoint) error {
+
 	if self.DstGrpFlow[endpoint.EndpointID] != nil {
 		// FIXME: handle this as Update
 		log.Warnf("DstGroup for endpoint %+v already exists", endpoint)
@@ -121,12 +128,19 @@ func (self *PolicyAgent) AddEndpoint(endpoint *OfnetEndpoint) error {
 	}
 
 	log.Infof("Adding dst group entry for endpoint: %+v", endpoint)
+	vrf := self.agent.vlanVrf[endpoint.Vlan]
 
+	log.Infof("Recevied add endpoint for vrf %v", *vrf)
+
+	vrfid := self.agent.vrfNameIdMap[*vrf]
+	vrfMetadata, vrfMetadataMask := Vrfmetadata(*vrfid)
 	// Install the Dst group lookup flow
 	dstGrpFlow, err := self.dstGrpTable.NewFlow(ofctrl.FlowMatch{
-		Priority:  FLOW_MATCH_PRIORITY,
-		Ethertype: 0x0800,
-		IpDa:      &endpoint.IpAddr,
+		Priority:     FLOW_MATCH_PRIORITY,
+		Ethertype:    0x0800,
+		IpDa:         &endpoint.IpAddr,
+		Metadata:     &vrfMetadata,
+		MetadataMask: &vrfMetadataMask,
 	})
 	if err != nil {
 		log.Errorf("Error adding dstGroup flow for %v. Err: %v", endpoint.IpAddr, err)
@@ -153,12 +167,55 @@ func (self *PolicyAgent) AddEndpoint(endpoint *OfnetEndpoint) error {
 	// save the Flow
 	self.DstGrpFlow[endpoint.EndpointID] = dstGrpFlow
 
+
+	// Add flow for TE policies - SRTE
+	/*`
+	for _, policy := range self.Policys {
+		log.Infof("Policy in self.Policys in endpt: %+v", policy)
+	 	if(policy.EndptgpID == endpoint.EndpointGroup) && ( policy.PolicyType == "TEPolicy") {
+	 		macAddr, err := net.ParseMAC(endpoint.MacAddrStr)
+				if err != nil {
+			 		return err
+			}
+	 		// Default flow in srmpls table - SRTE
+			srmplsTable := self.ofSwitch.GetTable(SRMPLS_TBL_ID)
+
+			srmplsFlow, err := srmplsTable.NewFlow(ofctrl.FlowMatch{
+				Ethertype: 0x8847,
+				Priority: FLOW_MISS_PRIORITY,
+				MacSa:    &macAddr,
+			})
+			if err != nil {
+				log.Errorf("Error creating srmpls flow for endpoint %+v. Err: %v", endpoint, err)
+				return err
+			}
+			srmplsFlow.PopMpls()
+			macDestTable := self.ofSwitch.GetTable(IP_TBL_ID)
+			err = srmplsFlow.Next(macDestTable)
+			if err != nil {
+				log.Errorf("Error installing srmpls entry. Err: %v", err)
+				return err
+			}
+			self.SrMplsFlow[endpoint.EndpointID] = srmplsFlow
+	 	}
+	 }
+	*/
 	return nil
 }
 
 // DelEndpoint deletes an endpoint from dst group lookup
 func (self *PolicyAgent) DelEndpoint(endpoint *OfnetEndpoint) error {
+
+	// Remove the port vlan flow.
+	srMplsFlow := self.SrMplsFlow[endpoint.EndpointID]
+	if srMplsFlow != nil {
+		err := srMplsFlow.Delete()
+		if err != nil {
+			log.Errorf("Error deleting srMplsFlow flow. Err: %v", err)
+		}
+	}
 	// find the dst group flow
+
 	dstGrp := self.DstGrpFlow[endpoint.EndpointID]
 	if dstGrp == nil {
 		return errors.New("Dst Group not found")
@@ -172,6 +229,24 @@ func (self *PolicyAgent) DelEndpoint(endpoint *OfnetEndpoint) error {
 
 	// delete the cache
 	delete(self.DstGrpFlow, endpoint.EndpointID)
+
+	return nil
+}
+
+// AddRule adds a security rule to policy table
+func (self *PolicyAgent) AttachPolicy(ofnetPol *OfnetPolicy ,  ret *bool) error {
+	
+	self.Policys[ofnetPol.PolicyId] = ofnetPol
+
+	return nil
+}
+
+// DetachPolicy deletes policy table
+func (self *PolicyAgent) DetachPolicy(epgPolicyKey string , ret *bool) error {
+	log.Infof("Received DetachPolicy: %+v", epgPolicyKey)
+
+	// Delete the policy from cache
+	delete(self.Policys, epgPolicyKey)
 
 	return nil
 }
@@ -264,54 +339,107 @@ func (self *PolicyAgent) AddRule(rule *OfnetPolicyRule, ret *bool) error {
 		flagPtr = &flag
 		flagMaskPtr = &flagMask
 	}
-	// Install the rule in policy table
-	ruleFlow, err := self.policyTable.NewFlow(ofctrl.FlowMatch{
-		Priority:     uint16(FLOW_POLICY_PRIORITY_OFFSET + rule.Priority),
-		Ethertype:    0x0800,
-		IpDa:         ipDa,
-		IpDaMask:     ipDaMask,
-		IpSa:         ipSa,
-		IpSaMask:     ipSaMask,
-		IpProto:      rule.IpProtocol,
-		TcpSrcPort:   rule.SrcPort,
-		TcpDstPort:   rule.DstPort,
-		UdpSrcPort:   rule.SrcPort,
-		UdpDstPort:   rule.DstPort,
-		Metadata:     md,
-		MetadataMask: mdm,
-		TcpFlags:     flagPtr,
-		TcpFlagsMask: flagMaskPtr,
-	})
-	if err != nil {
-		log.Errorf("Error adding flow for rule {%v}. Err: %v", rule, err)
-		return err
-	}
+	if (( rule.Action == "allow" ) ||  ( rule.Action == "deny" )) { 
+		// Install the rule in policy table
+		ruleFlow, err := self.policyTable.NewFlow(ofctrl.FlowMatch{
+			Priority:     uint16(FLOW_POLICY_PRIORITY_OFFSET + rule.Priority),
+			Ethertype:    0x0800,
+			IpDa:         ipDa,
+			IpDaMask:     ipDaMask,
+			IpSa:         ipSa,
+			IpSaMask:     ipSaMask,
+			IpProto:      rule.IpProtocol,
+			TcpSrcPort:   rule.SrcPort,
+			TcpDstPort:   rule.DstPort,
+			UdpSrcPort:   rule.SrcPort,
+			UdpDstPort:   rule.DstPort,
+			Metadata:     md,
+			MetadataMask: mdm,
+			TcpFlags:     flagPtr,
+			TcpFlagsMask: flagMaskPtr,
+		})
+		if err != nil {
+			log.Errorf("Error adding flow for rule {%v}. Err: %v", rule, err)
+			return err
+		}
+		if rule.Action == "allow" {
+			err = ruleFlow.Next(self.nextTable)
+			if err != nil {
+				log.Errorf("Error installing flow {%+v}. Err: %v", ruleFlow, err)
+				return err
+			}
+		} else if rule.Action == "deny" {
+			err = ruleFlow.Next(self.ofSwitch.DropAction())
+			if err != nil {
+				log.Errorf("Error installing flow {%+v}. Err: %v", ruleFlow, err)
+				return err
+			}
+		}
+			// save the rule
+		pRule := PolicyRule{
+			rule: rule,
+			flow: ruleFlow,
+		}
+		self.Rules[rule.RuleId] = &pRule
+	} else if rule.Action == "sla" {  //SRTE Rule action
 
-	// Point it to next table
-	if rule.Action == "allow" {
-		err = ruleFlow.Next(self.nextTable)
+		log.Infof("SLA is : %+v", rule.Sla)
+		/*
+		var t uint16  = 0x1000
+ 		polFlow, err := self.policyTable.NewFlow(ofctrl.FlowMatch{
+			Priority: FLOW_MATCH_PRIORITY,
+			Ethertype:    0x0800,
+			VlanId:      t,
+			VlanIdMask:  &t,
+			Metadata:     md,
+			MetadataMask: mdm,
+		})
 		if err != nil {
-			log.Errorf("Error installing flow {%+v}. Err: %v", ruleFlow, err)
+			log.Errorf("Error creating policy flow {%+v}. Err: %v", polFlow, err)
 			return err
 		}
-	} else if rule.Action == "deny" {
-		err = ruleFlow.Next(self.ofSwitch.DropAction())
-		if err != nil {
-			log.Errorf("Error installing flow {%+v}. Err: %v", ruleFlow, err)
-			return err
+
+ 		polFlow.PopVlanPushMpls(rule.Sla)
+ 		err = polFlow.Next(self.srmplsTable)
+ 		if err != nil {
+ 			log.Errorf("Error installing flow {%+v}. Err: %v", polFlow, err)
+ 			return err
+ 		}
+ 		pRule := PolicyRule{
+			rule: rule,
+			flow: polFlow,
 		}
+		self.Rules[rule.RuleId] = &pRule
+		*/
+		polFlow1, err := self.policyTable.NewFlow(ofctrl.FlowMatch{
+                        Priority: FLOW_MATCH_PRIORITY,
+                        Ethertype:    0x0800,
+                        Metadata:     md,
+                        MetadataMask: mdm,
+                })
+                if err != nil {
+                        log.Errorf("Error creating policy flow {%+v}. Err: %v", polFlow1, err)
+                        return err
+                }
+
+                //polFlow1.PushMpls(rule.Sla)
+		polFlow1.SetMetadata(rule.Sla,rule.Sla)
+                err = polFlow1.Next(self.srmplsTable)
+                if err != nil {
+                        log.Errorf("Error installing flow {%+v}. Err: %v", polFlow1, err)
+                        return err
+                }
+		pRule := PolicyRule{
+                        rule: rule,
+                        flow: polFlow1,
+                }
+                self.Rules[rule.RuleId] = &pRule
+		
+		
 	} else {
 		log.Errorf("Unknown action in rule {%+v}", rule)
 		return errors.New("Unknown action in rule")
 	}
-
-	// save the rule
-	pRule := PolicyRule{
-		rule: rule,
-		flow: ruleFlow,
-	}
-	self.Rules[rule.RuleId] = &pRule
-
 	return nil
 }
 
@@ -352,6 +480,9 @@ func (self *PolicyAgent) InitTables(nextTblId uint8) error {
 	// Create all tables
 	self.dstGrpTable, _ = sw.NewTable(DST_GRP_TBL_ID)
 	self.policyTable, _ = sw.NewTable(POLICY_TBL_ID)
+	self.srmplsTable, _ = sw.NewTable(SRMPLS_TBL_ID)   //SRTE
+	
+ 
 
 	// Packets that miss dest group lookup still go to policy table
 	validPktFlow, _ := self.dstGrpTable.NewFlow(ofctrl.FlowMatch{
