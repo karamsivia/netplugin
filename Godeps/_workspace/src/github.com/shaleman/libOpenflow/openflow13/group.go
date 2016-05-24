@@ -136,7 +136,7 @@ type Bucket struct {
 func NewBucket() *Bucket {
     bkt := new(Bucket)
 
-    bkt.Weight = 1
+    bkt.Weight = 0 //SRTE - Added for OVS2.4 support
     bkt.pad = make([]byte, 4)
     bkt.Actions = make([]Action, 0)
     bkt.WatchPort = P_ANY
