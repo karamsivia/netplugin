@@ -20,11 +20,11 @@ import (
 	"strconv"
 
 	"github.com/contiv/contivmodel"
-	"github.com/contiv/netplugin/core"
-	"github.com/contiv/netplugin/netmaster/docknet"
-	"github.com/contiv/netplugin/netmaster/gstate"
-	"github.com/contiv/netplugin/netmaster/mastercfg"
-	"github.com/contiv/netplugin/utils"
+	"github.com/karamsivia/netplugin/core"
+	"github.com/karamsivia/netplugin/netmaster/docknet"
+	"github.com/karamsivia/netplugin/netmaster/gstate"
+	"github.com/karamsivia/netplugin/netmaster/mastercfg"
+	"github.com/karamsivia/netplugin/utils"
 
 	log "github.com/Sirupsen/logrus"
 )

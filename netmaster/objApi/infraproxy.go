@@ -11,10 +11,10 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/contiv/contivmodel"
-	"github.com/contiv/netplugin/core"
-	"github.com/contiv/netplugin/netmaster/master"
-	"github.com/contiv/netplugin/netmaster/mastercfg"
-	"github.com/contiv/netplugin/utils"
+	"github.com/karamsivia/netplugin/core"
+	"github.com/karamsivia/netplugin/netmaster/master"
+	"github.com/karamsivia/netplugin/netmaster/mastercfg"
+	"github.com/karamsivia/netplugin/utils"
 )
 
 const (
