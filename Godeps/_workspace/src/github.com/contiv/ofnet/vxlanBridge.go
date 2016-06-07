@@ -225,6 +225,15 @@ func (self *Vxlan) AddLocalEndpoint(endpoint OfnetEndpoint) error {
 		return err
 	}
 
+	// Install dst group entry for IPv6 endpoint
+	if endpoint.Ipv6Addr != nil {
+		err = self.policyAgent.AddIpv6Endpoint(&endpoint)
+		if err != nil {
+			log.Errorf("Error adding IPv6 endpoint to policy agent{%+v}. Err: %v", endpoint, err)
+			return err
+		}
+	}
+
 	// Save the flow in DB
 	self.macFlowDb[endpoint.MacAddrStr] = macFlow
 
@@ -277,6 +286,15 @@ func (self *Vxlan) RemoveLocalEndpoint(endpoint OfnetEndpoint) error {
 	if err != nil {
 		log.Errorf("Error deleting endpoint to policy agent{%+v}. Err: %v", endpoint, err)
 		return err
+	}
+
+	// Remove IPv6 endpoint from policy tables
+	if endpoint.Ipv6Addr != nil {
+		err = self.policyAgent.DelIpv6Endpoint(&endpoint)
+		if err != nil {
+			log.Errorf("Error deleting IPv6 endpoint from policy agent{%+v}. Err: %v", endpoint, err)
+			return err
+		}
 	}
 
 	return nil
@@ -355,10 +373,11 @@ func (self *Vxlan) RemoveVtepPort(portNo uint32, remoteIp net.IP) error {
 	for _, vlan := range self.vlanDb {
 		// Walk all vlans and remove from flood lists
 		vlan.allFlood.RemoveOutput(output)
+
+		portVlanFlow := vlan.vtepVlanFlowDb[portNo]
+		portVlanFlow.Delete()
+		delete(vlan.vtepVlanFlowDb, portNo)
 	}
-
-	// FIXME: uninstall vlan-vni mapping.
-
 	return nil
 }
 
@@ -572,6 +591,15 @@ func (self *Vxlan) AddEndpoint(endpoint *OfnetEndpoint) error {
 		return err
 	}
 
+	// Install dst group entry for IPv6 endpoint
+	if endpoint.Ipv6Addr != nil {
+		err = self.policyAgent.AddIpv6Endpoint(endpoint)
+		if err != nil {
+			log.Errorf("Error adding IPv6 endpoint to policy agent{%+v}. Err: %v", endpoint, err)
+			return err
+		}
+	}
+
 	// Save the flow in DB
 	self.macFlowDb[endpoint.MacAddrStr] = macFlow
 	return nil
@@ -604,6 +632,15 @@ func (self *Vxlan) RemoveEndpoint(endpoint *OfnetEndpoint) error {
 	if err != nil {
 		log.Errorf("Error deleting endpoint to policy agent{%+v}. Err: %v", endpoint, err)
 		return err
+	}
+
+	// Remove the endpoint from policy tables
+	if endpoint.Ipv6Addr != nil {
+		err = self.policyAgent.DelIpv6Endpoint(endpoint)
+		if err != nil {
+			log.Errorf("Error deleting IPv6 endpoint from policy agent{%+v}. Err: %v", endpoint, err)
+			return err
+		}
 	}
 
 	return nil
@@ -725,12 +762,12 @@ func (self *Vxlan) processArp(pkt protocol.Ethernet, inPort uint32) {
 				return
 			}
 
-                        if self.agent.portVlanMap[inPort] == nil{
-                            log.Debugf("Invalid port vlan mapping. Ignoring arp packet")
-                            return
-                        }
-                        vlan := self.agent.portVlanMap[inPort]
-                           
+			if self.agent.portVlanMap[inPort] == nil {
+				log.Debugf("Invalid port vlan mapping. Ignoring arp packet")
+				return
+			}
+			vlan := self.agent.portVlanMap[inPort]
+
 			// Lookup the Source and Dest IP in the endpoint table
 			srcEp := self.agent.getEndpointByIpVlan(arpIn.IPSrc, *vlan)
 			dstEp := self.agent.getEndpointByIpVlan(arpIn.IPDst, *vlan)
@@ -849,7 +886,7 @@ func (self *Vxlan) sendGARP(ip net.IP, mac net.HardwareAddr, vni uint64) error {
 		return nil
 	}
 
-    pktOut := BuildGarpPkt(ip, mac, 0)
+	pktOut := BuildGarpPkt(ip, mac, 0)
 
 	tunnelIdField := openflow13.NewTunnelIdField(vni)
 	setTunnelAction := openflow13.NewActionSetField(*tunnelIdField)

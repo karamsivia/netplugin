@@ -4,6 +4,7 @@ package ipamapi
 import (
 	"net"
 
+	"github.com/docker/libnetwork/discoverapi"
 	"github.com/docker/libnetwork/types"
 )
 
@@ -14,6 +15,8 @@ import (
 const (
 	// DefaultIPAM is the name of the built-in default ipam driver
 	DefaultIPAM = "default"
+	// NullIPAM is the name of the built-in null ipam driver
+	NullIPAM = "null"
 	// PluginEndpointType represents the Endpoint Type used by Plugin system
 	PluginEndpointType = "IpamDriver"
 	// RequestAddressType represents the Address Type used when requesting an address
@@ -32,7 +35,7 @@ type Callback interface {
  * IPAM Errors
  **************/
 
-// Weel-known errors returned by IPAM
+// Well-known errors returned by IPAM
 var (
 	ErrIpamInternalError   = types.InternalErrorf("IPAM Internal Error")
 	ErrInvalidAddressSpace = types.BadRequestErrorf("Invalid Address Space")
@@ -56,6 +59,8 @@ var (
 // Ipam represents the interface the IPAM service plugins must implement
 // in order to allow injection/modification of IPAM database.
 type Ipam interface {
+	discoverapi.Discover
+
 	// GetDefaultAddressSpaces returns the default local and global address spaces for this ipam
 	GetDefaultAddressSpaces() (string, string, error)
 	// RequestPool returns an address pool along with its unique id. Address space is a mandatory field
@@ -75,5 +80,10 @@ type Ipam interface {
 
 // Capability represents the requirements and capabilities of the IPAM driver
 type Capability struct {
+	// Whether on address request, libnetwork must
+	// specify the endpoint MAC address
 	RequiresMACAddress bool
+	// Whether of daemon start, libnetwork must replay the pool
+	// request and the address request for current local networks
+	RequiresRequestReplay bool
 }

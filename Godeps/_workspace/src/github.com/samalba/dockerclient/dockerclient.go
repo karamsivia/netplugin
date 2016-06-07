@@ -19,6 +19,13 @@ import (
 var _ Client = (*DockerClient)(nil)
 
 const (
+	// APIVersion is currently hardcoded to v1.15
+	// TODO: bump the API version or allow users to choose which API version to
+	// use the client with. The current value does not make sense for many
+	// methods, such as ContainerStats, StartMonitorStats, and StopAllMonitorStats
+	// (v1.17) and
+	// ListVolumes, {Remove,Create}Volume, ListNetworks,
+	// {Inspect,Create,Connect,Disconnect,Remove}Network (v1.21)
 	APIVersion = "v1.15"
 )
 
@@ -258,6 +265,36 @@ func (client *DockerClient) ContainerChanges(id string) ([]*ContainerChanges, er
 	return changes, nil
 }
 
+func (client *DockerClient) ContainerStats(id string, stopChan <-chan struct{}) (<-chan StatsOrError, error) {
+	uri := fmt.Sprintf("/%s/containers/%s/stats", APIVersion, id)
+	resp, err := client.HTTPClient.Get(client.URL.String() + uri)
+	if err != nil {
+		return nil, err
+	}
+
+	decode := func(decoder *json.Decoder) decodingResult {
+		var containerStats Stats
+		if err := decoder.Decode(&containerStats); err != nil {
+			return decodingResult{err: err}
+		} else {
+			return decodingResult{result: containerStats}
+		}
+	}
+	decodingResultChan := client.readJSONStream(resp.Body, decode, stopChan)
+	statsOrErrorChan := make(chan StatsOrError)
+	go func() {
+		for decodingResult := range decodingResultChan {
+			stats, _ := decodingResult.result.(Stats)
+			statsOrErrorChan <- StatsOrError{
+				Stats: stats,
+				Error: decodingResult.err,
+			}
+		}
+		close(statsOrErrorChan)
+	}()
+	return statsOrErrorChan, nil
+}
+
 func (client *DockerClient) readJSONStream(stream io.ReadCloser, decode func(*json.Decoder) decodingResult, stopChan <-chan struct{}) <-chan decodingResult {
 	resultChan := make(chan decodingResult)
 
@@ -443,15 +480,39 @@ func (client *DockerClient) MonitorEvents(options *MonitorEventsOptions, stopCha
 		}
 		if options.Filters != nil {
 			filterMap := make(map[string][]string)
-			if len(options.Filters.Event) > 0 {
-				filterMap["event"] = []string{options.Filters.Event}
+			events := []string{}
+			if options.Filters.Event != "" {
+				events = append(events, options.Filters.Event)
 			}
-			if len(options.Filters.Image) > 0 {
-				filterMap["image"] = []string{options.Filters.Image}
+			if len(options.Filters.Events) > 0 {
+				events = append(events, options.Filters.Events...)
 			}
-			if len(options.Filters.Container) > 0 {
-				filterMap["container"] = []string{options.Filters.Container}
+			if len(events) > 0 {
+				filterMap["event"] = events
 			}
+
+			images := []string{}
+			if options.Filters.Image != "" {
+				images = append(images, options.Filters.Image)
+			}
+			if len(options.Filters.Images) > 0 {
+				images = append(images, options.Filters.Images...)
+			}
+			if len(images) > 0 {
+				filterMap["image"] = images
+			}
+
+			containers := []string{}
+			if options.Filters.Container != "" {
+				containers = append(containers, options.Filters.Container)
+			}
+			if len(options.Filters.Containers) > 0 {
+				containers = append(containers, options.Filters.Containers...)
+			}
+			if len(containers) > 0 {
+				filterMap["container"] = containers
+			}
+
 			if len(filterMap) > 0 {
 				filterJSONBytes, err := json.Marshal(filterMap)
 				if err != nil {

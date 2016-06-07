@@ -49,46 +49,64 @@ type ContainerConfig struct {
 }
 
 type HostConfig struct {
-	Binds             []string
-	ContainerIDFile   string
-	LxcConf           []map[string]string
-	Memory            int64
-	MemoryReservation int64
-	MemorySwap        int64
-	KernelMemory      int64
-	CpuShares         int64
-	CpuPeriod         int64
-	CpusetCpus        string
-	CpusetMems        string
-	CpuQuota          int64
-	BlkioWeight       int64
-	OomKillDisable    bool
-	MemorySwappiness  int64
-	Privileged        bool
-	PortBindings      map[string][]PortBinding
-	Links             []string
-	PublishAllPorts   bool
-	Dns               []string
-	DNSOptions        []string
-	DnsSearch         []string
-	ExtraHosts        []string
-	VolumesFrom       []string
-	Devices           []DeviceMapping
-	NetworkMode       string
-	IpcMode           string
-	PidMode           string
-	UTSMode           string
-	CapAdd            []string
-	CapDrop           []string
-	GroupAdd          []string
-	RestartPolicy     RestartPolicy
-	SecurityOpt       []string
-	ReadonlyRootfs    bool
-	Ulimits           []Ulimit
-	LogConfig         LogConfig
-	CgroupParent      string
-	ConsoleSize       [2]int
-	VolumeDriver      string
+	Binds                []string
+	ContainerIDFile      string
+	LxcConf              []map[string]string
+	Memory               int64
+	MemoryReservation    int64
+	MemorySwap           int64
+	KernelMemory         int64
+	CpuShares            int64
+	CpuPeriod            int64
+	CpusetCpus           string
+	CpusetMems           string
+	CpuQuota             int64
+	BlkioWeight          int64
+	OomKillDisable       bool
+	MemorySwappiness     int64
+	Privileged           bool
+	PortBindings         map[string][]PortBinding
+	Links                []string
+	PublishAllPorts      bool
+	Dns                  []string
+	DNSOptions           []string
+	DnsSearch            []string
+	ExtraHosts           []string
+	VolumesFrom          []string
+	Devices              []DeviceMapping
+	NetworkMode          string
+	IpcMode              string
+	PidMode              string
+	UTSMode              string
+	CapAdd               []string
+	CapDrop              []string
+	GroupAdd             []string
+	RestartPolicy        RestartPolicy
+	SecurityOpt          []string
+	ReadonlyRootfs       bool
+	Ulimits              []Ulimit
+	LogConfig            LogConfig
+	CgroupParent         string
+	ConsoleSize          [2]int
+	VolumeDriver         string
+	OomScoreAdj          int
+	Tmpfs                map[string]string
+	ShmSize              int64 `json:"omitempty"`
+	BlkioWeightDevice    []WeightDevice
+	BlkioDeviceReadBps   []ThrottleDevice
+	BlkioDeviceWriteBps  []ThrottleDevice
+	BlkioDeviceReadIOps  []ThrottleDevice
+	BlkioDeviceWriteIOps []ThrottleDevice
+}
+
+type WeightDevice struct {
+	Path   string
+	Weight uint16
+}
+
+type ThrottleDevice struct {
+	Path string
+	Rate uint64
 }
 
 type DeviceMapping struct {
@@ -124,9 +142,12 @@ type AttachOptions struct {
 }
 
 type MonitorEventsFilters struct {
-	Event     string `json:",omitempty"`
-	Image     string `json:",omitempty"`
-	Container string `json:",omitempty"`
+	Event        string `json:",omitempty"`
+	Events     []string `json:",omitempty"`
+	Image        string `json:",omitempty"`
+	Images     []string `json:",omitempty"`
+	Container    string `json:",omitempty"`
+	Containers []string `json:",omitempty"`
 }
 
 type MonitorEventsOptions struct {
@@ -177,6 +198,10 @@ func (s *State) String() string {
 		return "Dead"
 	}
 
+	if s.StartedAt.IsZero() {
+		return "Created"
+	}
+
 	if s.FinishedAt.IsZero() {
 		return ""
 	}
@@ -199,6 +224,10 @@ func (s *State) StateString() string {
 
 	if s.Dead {
 		return "dead"
+	}
+
+	if s.StartedAt.IsZero() {
+		return "created"
 	}
 
 	return "exited"
@@ -389,6 +418,11 @@ type ImageDelete struct {
 	Untagged string
 }
 
+type StatsOrError struct {
+	Stats
+	Error error
+}
+
 type EventOrError struct {
 	Event
 	Error error
@@ -414,6 +448,7 @@ type ThrottlingData struct {
 	ThrottledTime uint64 `json:"throttled_time"`
 }
 
+// All CPU stats are aggregated since container inception.
 type CpuUsage struct {
 	// Total CPU time consumed.
 	// Units: nanoseconds.
@@ -512,12 +547,14 @@ type BuildImage struct {
 	CpuSetMems     string
 	CgroupParent   string
 	BuildArgs      map[string]string
+	Labels         map[string]string // Labels hold metadata about the image
 }
 
 type Volume struct {
-	Name       string // Name is the name of the volume
-	Driver     string // Driver is the Driver name used to create the volume
-	Mountpoint string // Mountpoint is the location on disk of the volume
+	Name       string            // Name is the name of the volume
+	Driver     string            // Driver is the Driver name used to create the volume
+	Mountpoint string            // Mountpoint is the location on disk of the volume
+	Labels     map[string]string // Labels hold metadata about the volume
 }
 
 type VolumesListResponse struct {
@@ -528,6 +565,7 @@ type VolumeCreateRequest struct {
 	Name       string            // Name is the requested name of the volume
 	Driver     string            // Driver is the name of the driver that should be used to create the volume
 	DriverOpts map[string]string // DriverOpts holds the driver specific options to use for when creating the volume.
+	Labels     map[string]string // Labels hold metadata about the volume
 }
 
 // IPAM represents IP Address Management
@@ -561,6 +599,7 @@ type NetworkResource struct {
 	//Internal   bool
 	Containers map[string]EndpointResource
 	Options    map[string]string
+	Labels     map[string]string // Labels hold metadata about the network
 }
 
 // EndpointResource contains network resources allocated and used for a container in a network
@@ -580,6 +619,7 @@ type NetworkCreate struct {
 	IPAM           IPAM
 	Internal       bool
 	Options        map[string]string
+	Labels         map[string]string // Labels hold metadata about the network
 }
 
 // NetworkCreateResponse is the response message sent by the server for network create call
