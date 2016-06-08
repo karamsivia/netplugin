@@ -22,12 +22,12 @@ import (
 	"os"
 	"sync"
 
-	"github.com/karamsivia/netplugin/core"
-	"github.com/karamsivia/netplugin/drivers"
-	"github.com/karamsivia/netplugin/netmaster/master"
-	"github.com/karamsivia/netplugin/netmaster/mastercfg"
-	"github.com/karamsivia/netplugin/netmaster/objApi"
-	"github.com/karamsivia/netplugin/utils"
+	"github.com/contiv/netplugin/core"
+	"github.com/contiv/netplugin/drivers"
+	"github.com/contiv/netplugin/netmaster/master"
+	"github.com/contiv/netplugin/netmaster/mastercfg"
+	"github.com/contiv/netplugin/netmaster/objApi"
+	"github.com/contiv/netplugin/utils"
 	"github.com/contiv/objdb"
 	"github.com/contiv/ofnet"
 	"github.com/gorilla/mux"
@@ -85,7 +85,7 @@ func (d *daemon) registerWebuiHandler(router *mux.Router) {
 		// Make sure we have the web UI files
 		_, err := os.Stat(webPath)
 		if err != nil {
-			webPath = goPath + "/src/github.com/karamsivia/netplugin/" +
+			webPath = goPath + "/src/github.com/contiv/netplugin/" +
 				"Godeps/_workspace/src/github.com/contiv/contivmodel/www/"
 			_, err := os.Stat(webPath)
 			if err != nil {

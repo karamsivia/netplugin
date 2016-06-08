@@ -23,9 +23,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/karamsivia/contivmodel"
+	"github.com/contiv/contivmodel"
 	"github.com/contiv/netplugin/core"
-	"github.com/karamsivia/ofnet"
+	"github.com/contiv/ofnet"
 )
 
 const (
