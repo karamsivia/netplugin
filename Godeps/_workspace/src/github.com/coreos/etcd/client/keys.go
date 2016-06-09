@@ -14,27 +14,32 @@
 
 package client
 
+//go:generate codecgen -d 1819 -r "Node|Response|Nodes" -o keys.generated.go keys.go
+
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/coreos/etcd/pkg/pathutil"
+	"github.com/ugorji/go/codec"
 	"golang.org/x/net/context"
 )
 
 const (
-	ErrorCodeKeyNotFound = 100
-	ErrorCodeTestFailed  = 101
-	ErrorCodeNotFile     = 102
-	ErrorCodeNotDir      = 104
-	ErrorCodeNodeExist   = 105
-	ErrorCodeRootROnly   = 107
-	ErrorCodeDirNotEmpty = 108
+	ErrorCodeKeyNotFound  = 100
+	ErrorCodeTestFailed   = 101
+	ErrorCodeNotFile      = 102
+	ErrorCodeNotDir       = 104
+	ErrorCodeNodeExist    = 105
+	ErrorCodeRootROnly    = 107
+	ErrorCodeDirNotEmpty  = 108
+	ErrorCodeUnauthorized = 110
 
 	ErrorCodePrevValueRequired = 201
 	ErrorCodeTTLNaN            = 202
@@ -59,6 +64,11 @@ type Error struct {
 func (e Error) Error() string {
 	return fmt.Sprintf("%v: %v (%v) [%v]", e.Code, e.Message, e.Cause, e.Index)
 }
+
+var (
+	ErrInvalidJSON = errors.New("client: response is invalid json. The endpoint is probably not valid etcd cluster endpoint.")
+	ErrEmptyBody   = errors.New("client: response body is empty")
+)
 
 // PrevExistType is used to define an existence condition when setting
 // or deleting Nodes.
@@ -96,7 +106,7 @@ type KeysAPI interface {
 
 	// Set assigns a new value to a Node identified by a given key. The caller
 	// may define a set of conditions in the SetOptions. If SetOptions.Dir=true
-	// than value is ignored.
+	// then value is ignored.
 	Set(ctx context.Context, key, value string, opts *SetOptions) (*Response, error)
 
 	// Delete removes a Node identified by the given key, optionally destroying
@@ -130,7 +140,7 @@ type WatcherOptions struct {
 	// index, whatever that may be.
 	AfterIndex uint64
 
-	// Recursive specifices whether or not the Watcher should emit
+	// Recursive specifies whether or not the Watcher should emit
 	// events that occur in children of the given keyspace. If set
 	// to false (default), events will be limited to those that
 	// occur for the exact key.
@@ -174,6 +184,11 @@ type SetOptions struct {
 	// a TTL of 0.
 	TTL time.Duration
 
+	// Refresh set to true means a TTL value can be updated
+	// without firing a watch or changing the node value. A
+	// value must not be provided when refreshing a key.
+	Refresh bool
+
 	// Dir specifies whether or not this Node should be created as a directory.
 	Dir bool
 }
@@ -189,6 +204,11 @@ type GetOptions struct {
 	// not be sorted and the ordering used should not be considered
 	// predictable.
 	Sort bool
+
+	// Quorum specifies whether it gets the latest committed value that
+	// has been applied in quorum of members, which ensures external
+	// consistency (or linearizability).
+	Quorum bool
 }
 
 type DeleteOptions struct {
@@ -212,11 +232,14 @@ type DeleteOptions struct {
 	// or explicitly set to false, only a single Node will be
 	// deleted.
 	Recursive bool
+
+	// Dir specifies whether or not this Node should be removed as a directory.
+	Dir bool
 }
 
 type Watcher interface {
 	// Next blocks until an etcd event occurs, then returns a Response
-	// represeting that event. The behavior of Next depends on the
+	// representing that event. The behavior of Next depends on the
 	// WatcherOptions used to construct the Watcher. Next is designed to
 	// be called repeatedly, each time blocking until a subsequent event
 	// is available.
@@ -238,7 +261,7 @@ type Response struct {
 	Node *Node `json:"node"`
 
 	// PrevNode represents the previous state of the Node. PrevNode is non-nil
-	// only if the Node existed before the action occured and the action
+	// only if the Node existed before the action occurred and the action
 	// caused a change to the Node.
 	PrevNode *Node `json:"prevNode"`
 
@@ -261,7 +284,7 @@ type Node struct {
 	// Nodes holds the children of this Node, only if this Node is a directory.
 	// This slice of will be arbitrarily deep (children, grandchildren, great-
 	// grandchildren, etc.) if a recursive Get or Watch request were made.
-	Nodes []*Node `json:"nodes"`
+	Nodes Nodes `json:"nodes"`
 
 	// CreatedIndex is the etcd index at-which this Node was created.
 	CreatedIndex uint64 `json:"createdIndex"`
@@ -285,6 +308,14 @@ func (n *Node) TTLDuration() time.Duration {
 	return time.Duration(n.TTL) * time.Second
 }
 
+type Nodes []*Node
+
+// interfaces for sorting
+
+func (ns Nodes) Len() int           { return len(ns) }
+func (ns Nodes) Less(i, j int) bool { return ns[i].Key < ns[j].Key }
+func (ns Nodes) Swap(i, j int)      { ns[i], ns[j] = ns[j], ns[i] }
+
 type httpKeysAPI struct {
 	client httpClient
 	prefix string
@@ -302,6 +333,7 @@ func (k *httpKeysAPI) Set(ctx context.Context, key, val string, opts *SetOptions
 		act.PrevIndex = opts.PrevIndex
 		act.PrevExist = opts.PrevExist
 		act.TTL = opts.TTL
+		act.Refresh = opts.Refresh
 		act.Dir = opts.Dir
 	}
 
@@ -349,6 +381,7 @@ func (k *httpKeysAPI) Delete(ctx context.Context, key string, opts *DeleteOption
 	if opts != nil {
 		act.PrevValue = opts.PrevValue
 		act.PrevIndex = opts.PrevIndex
+		act.Dir = opts.Dir
 		act.Recursive = opts.Recursive
 	}
 
@@ -369,6 +402,7 @@ func (k *httpKeysAPI) Get(ctx context.Context, key string, opts *GetOptions) (*R
 	if opts != nil {
 		act.Recursive = opts.Recursive
 		act.Sorted = opts.Sort
+		act.Quorum = opts.Quorum
 	}
 
 	resp, body, err := k.client.Do(ctx, act)
@@ -404,18 +438,23 @@ type httpWatcher struct {
 }
 
 func (hw *httpWatcher) Next(ctx context.Context) (*Response, error) {
-	httpresp, body, err := hw.client.Do(ctx, &hw.nextWait)
-	if err != nil {
-		return nil, err
-	}
+	for {
+		httpresp, body, err := hw.client.Do(ctx, &hw.nextWait)
+		if err != nil {
+			return nil, err
+		}
 
-	resp, err := unmarshalHTTPResponse(httpresp.StatusCode, httpresp.Header, body)
-	if err != nil {
-		return nil, err
-	}
+		resp, err := unmarshalHTTPResponse(httpresp.StatusCode, httpresp.Header, body)
+		if err != nil {
+			if err == ErrEmptyBody {
+				continue
+			}
+			return nil, err
+		}
 
-	hw.nextWait.WaitIndex = resp.Node.ModifiedIndex + 1
-	return resp, nil
+		hw.nextWait.WaitIndex = resp.Node.ModifiedIndex + 1
+		return resp, nil
+	}
 }
 
 // v2KeysURL forms a URL representing the location of a key.
@@ -424,7 +463,16 @@ func (hw *httpWatcher) Next(ctx context.Context) (*Response, error) {
 // provided endpoint's path to the root of the keys API
 // (typically "/v2/keys").
 func v2KeysURL(ep url.URL, prefix, key string) *url.URL {
-	ep.Path = path.Join(ep.Path, prefix, key)
+	// We concatenate all parts together manually. We cannot use
+	// path.Join because it does not reserve trailing slash.
+	// We call CanonicalURLPath to further cleanup the path.
+	if prefix != "" && prefix[0] != '/' {
+		prefix = "/" + prefix
+	}
+	if key != "" && key[0] != '/' {
+		key = "/" + key
+	}
+	ep.Path = pathutil.CanonicalURLPath(ep.Path + prefix + key)
 	return &ep
 }
 
@@ -433,6 +481,7 @@ type getAction struct {
 	Key       string
 	Recursive bool
 	Sorted    bool
+	Quorum    bool
 }
 
 func (g *getAction) HTTPRequest(ep url.URL) *http.Request {
@@ -441,6 +490,7 @@ func (g *getAction) HTTPRequest(ep url.URL) *http.Request {
 	params := u.Query()
 	params.Set("recursive", strconv.FormatBool(g.Recursive))
 	params.Set("sorted", strconv.FormatBool(g.Sorted))
+	params.Set("quorum", strconv.FormatBool(g.Quorum))
 	u.RawQuery = params.Encode()
 
 	req, _ := http.NewRequest("GET", u.String(), nil)
@@ -475,6 +525,7 @@ type setAction struct {
 	PrevIndex uint64
 	PrevExist PrevExistType
 	TTL       time.Duration
+	Refresh   bool
 	Dir       bool
 }
 
@@ -506,6 +557,10 @@ func (a *setAction) HTTPRequest(ep url.URL) *http.Request {
 		form.Add("ttl", strconv.FormatUint(uint64(a.TTL.Seconds()), 10))
 	}
 
+	if a.Refresh {
+		form.Add("refresh", "true")
+	}
+
 	u.RawQuery = params.Encode()
 	body := strings.NewReader(form.Encode())
 
@@ -520,6 +575,7 @@ type deleteAction struct {
 	Key       string
 	PrevValue string
 	PrevIndex uint64
+	Dir       bool
 	Recursive bool
 }
 
@@ -532,6 +588,9 @@ func (a *deleteAction) HTTPRequest(ep url.URL) *http.Request {
 	}
 	if a.PrevIndex != 0 {
 		params.Set("prevIndex", strconv.FormatUint(a.PrevIndex, 10))
+	}
+	if a.Dir {
+		params.Set("dir", "true")
 	}
 	if a.Recursive {
 		params.Set("recursive", "true")
@@ -569,6 +628,9 @@ func (a *createInOrderAction) HTTPRequest(ep url.URL) *http.Request {
 func unmarshalHTTPResponse(code int, header http.Header, body []byte) (res *Response, err error) {
 	switch code {
 	case http.StatusOK, http.StatusCreated:
+		if len(body) == 0 {
+			return nil, ErrEmptyBody
+		}
 		res, err = unmarshalSuccessfulKeysResponse(header, body)
 	default:
 		err = unmarshalFailedKeysResponse(body)
@@ -579,9 +641,9 @@ func unmarshalHTTPResponse(code int, header http.Header, body []byte) (res *Resp
 
 func unmarshalSuccessfulKeysResponse(header http.Header, body []byte) (*Response, error) {
 	var res Response
-	err := json.Unmarshal(body, &res)
+	err := codec.NewDecoderBytes(body, new(codec.JsonHandle)).Decode(&res)
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidJSON
 	}
 	if header.Get("X-Etcd-Index") != "" {
 		res.Index, err = strconv.ParseUint(header.Get("X-Etcd-Index"), 10, 64)
@@ -595,7 +657,7 @@ func unmarshalSuccessfulKeysResponse(header http.Header, body []byte) (*Response
 func unmarshalFailedKeysResponse(body []byte) error {
 	var etcdErr Error
 	if err := json.Unmarshal(body, &etcdErr); err != nil {
-		return err
+		return ErrInvalidJSON
 	}
 	return etcdErr
 }

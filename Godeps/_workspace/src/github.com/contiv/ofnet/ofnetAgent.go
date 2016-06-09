@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
-	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -51,7 +50,6 @@ type OfnetAgent struct {
 	dpName      string             // Datapath type
 	datapath    OfnetDatapath      // Configured datapath
 	protopath   OfnetProto         // Configured protopath
-	mutex       sync.Mutex         // Sync mutext when we need to lock
 
 	masterDb map[string]*OfnetNode // list of Masters
 
@@ -81,14 +79,12 @@ type OfnetAgent struct {
 
 // local End point information
 type EndpointInfo struct {
-	PortNo            uint32
-	EndpointGroup     int
-	MacAddr           net.HardwareAddr
-	Vlan              uint16
-	IpAddr            net.IP
-	Ipv6Addr          net.IP
-	Vrf               string
-	EndpointGroupVlan uint16
+	PortNo        uint32
+	EndpointGroup int
+	MacAddr       net.HardwareAddr
+	Vlan          uint16
+	IpAddr        net.IP
+	Vrf           string
 }
 
 const FLOW_MATCH_PRIORITY = 100        // Priority for all match flows
@@ -102,8 +98,9 @@ const (
 	DST_GRP_TBL_ID        = 3
 	POLICY_TBL_ID         = 4
 	SRV_PROXY_SNAT_TBL_ID = 5
-	IP_TBL_ID             = 6
-	MAC_DEST_TBL_ID       = 7
+	IP_TBL_ID = 7
+    SRMPLS_TBL_ID = 6  //SRTE - mpls table
+	MAC_DEST_TBL_ID = 8
 )
 
 // Create a new Ofnet agent and initialize it
@@ -178,16 +175,6 @@ func NewOfnetAgent(bridgeName string, dpName string, localIp net.IP, rpcPort uin
 	return agent, nil
 }
 
-func (self *OfnetAgent) lockDB() {
-	log.Infof("Locking endpoint db %s", self.dpName)
-	self.mutex.Lock()
-}
-
-func (self *OfnetAgent) unlockDB() {
-	log.Infof("Unlocking endpoint db %s", self.dpName)
-	self.mutex.Unlock()
-}
-
 // getEndpointId Get a unique identifier for the endpoint.
 func (self *OfnetAgent) getEndpointId(endpoint EndpointInfo) string {
 	vrf := self.vlanVrf[endpoint.Vlan]
@@ -253,11 +240,6 @@ func (self *OfnetAgent) SwitchConnected(sw *ofctrl.OFSwitch) {
 func (self *OfnetAgent) SwitchDisconnected(sw *ofctrl.OFSwitch) {
 	log.Infof("Switch %v disconnected", sw.DPID())
 
-	// Ignore if this error was not for current switch
-	if sw.DPID().String() != self.ofSwitch.DPID().String() {
-		return
-	}
-
 	// Inform the datapath
 	self.datapath.SwitchDisconnected(sw)
 
@@ -285,7 +267,8 @@ func (self *OfnetAgent) WaitForSwitchConnection() {
 
 // Receive a packet from the switch.
 func (self *OfnetAgent) PacketRcvd(sw *ofctrl.OFSwitch, pkt *ofctrl.PacketIn) {
-	log.Debugf("Packet received from switch %v. Packet: %+v", sw.DPID(), pkt)
+	log.Infof("Packet received from switch %v. Packet: %+v", sw.DPID(), pkt)
+	//log.Infof("Input Port: %+v", pkt.Match.Fields[0].Value)
 
 	// Inform the datapath
 	self.datapath.PacketRcvd(sw, pkt)
@@ -383,28 +366,20 @@ func (self *OfnetAgent) AddLocalEndpoint(endpoint EndpointInfo) error {
 		log.Errorf("Invalid vlan to vrf mapping for %v", endpoint.Vlan)
 		return errors.New("Invalid vlan to vrf mapping")
 	}
-	var v6mask net.IP
-	if endpoint.Ipv6Addr != nil {
-		v6mask = net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
-	}
-
 	// Build endpoint registry info
 	epreg := &OfnetEndpoint{
-		EndpointID:        epId,
-		EndpointType:      "internal",
-		EndpointGroup:     endpoint.EndpointGroup,
-		IpAddr:            endpoint.IpAddr,
-		IpMask:            net.ParseIP("255.255.255.255"),
-		Ipv6Addr:          endpoint.Ipv6Addr,
-		Ipv6Mask:          v6mask,
-		Vrf:               *vrf,
-		MacAddrStr:        endpoint.MacAddr.String(),
-		Vlan:              endpoint.Vlan,
-		Vni:               *vni,
-		OriginatorIp:      self.localIp,
-		PortNo:            endpoint.PortNo,
-		Timestamp:         time.Now(),
-		EndpointGroupVlan: endpoint.EndpointGroupVlan,
+		EndpointID:    epId,
+		EndpointType:  "internal",
+		EndpointGroup: endpoint.EndpointGroup,
+		IpAddr:        endpoint.IpAddr,
+		IpMask:        net.ParseIP("255.255.255.255"),
+		Vrf:           *vrf,
+		MacAddrStr:    endpoint.MacAddr.String(),
+		Vlan:          endpoint.Vlan,
+		Vni:           *vni,
+		OriginatorIp:  self.localIp,
+		PortNo:        endpoint.PortNo,
+		Timestamp:     time.Now(),
 	}
 
 	// Call the datapath
@@ -428,7 +403,7 @@ func (self *OfnetAgent) AddLocalEndpoint(endpoint EndpointInfo) error {
 		err := rpcHub.Client(master.HostAddr, master.HostPort).Call("OfnetMaster.EndpointAdd", epreg, &resp)
 		if err != nil {
 			log.Errorf("Failed to add endpoint %+v to master %+v. Err: %v", epreg, master, err)
-			// Continue sending the message to other masters.
+			return err
 		}
 	}
 
@@ -449,7 +424,7 @@ func (self *OfnetAgent) RemoveLocalEndpoint(portNo uint32) error {
 	// Call the datapath
 	err := self.datapath.RemoveLocalEndpoint(*epreg)
 	if err != nil {
-		log.Errorf("Error deleting endpoint port %d. Err: %v", portNo, err)
+		log.Errorf("Error deleting endpointon port %d. Err: %v", portNo, err)
 	}
 
 	// delete the endpoint from local endpoint table
@@ -483,10 +458,6 @@ func (self *OfnetAgent) AddVtepPort(portNo uint32, remoteIp net.IP) error {
 	}
 
 	log.Infof("Adding VTEP port(%d), Remote IP: %v", portNo, remoteIp)
-
-	// Dont handle endpointDB operations during this time
-	self.lockDB()
-	defer self.unlockDB()
 
 	// Store the vtep IP to port number mapping
 	self.vtepTable[remoteIp.String()] = &portNo
@@ -563,39 +534,22 @@ func (self *OfnetAgent) AddNetwork(vlanId uint16, vni uint32, Gw string, Vrf str
 
 // Remove a vlan from datapath
 func (self *OfnetAgent) RemoveNetwork(vlanId uint16, vni uint32, Gw string, Vrf string) error {
-	// Dont handle endpointDB operations during this time
-	self.lockDB()
-	self.unlockDB()
 
 	vrf := self.vlanVrf[vlanId]
 	gwEpid := self.getEndpointIdByIpVrf(net.ParseIP(Gw), *vrf)
 
 	delete(self.endpointDb, gwEpid)
 
-	// make sure there are no endpoints still installed in this vlan
-	for _, endpoint := range self.endpointDb {
-		if (vni != 0) && (endpoint.Vni == vni) {
-			if endpoint.OriginatorIp.String() == self.localIp.String() {
-				log.Fatalf("Vlan %d still has routes. Route: %+v", vlanId, endpoint)
-			} else {
-				// Network delete arrived before other hosts cleanup endpoint
-				log.Warnf("Vlan %d still has routes, cleaning up. Route: %+v", vlanId, endpoint)
-				// Uninstall the endpoint from datapath
-				err := self.datapath.RemoveEndpoint(endpoint)
-				if err != nil {
-					log.Errorf("Error deleting endpoint: {%+v}. Err: %v", endpoint, err)
-				}
-
-				// Remove it from endpoint table
-				delete(self.endpointDb, endpoint.EndpointID)
-			}
-		}
-	}
-
 	// Clear the database
 	delete(self.vlanVniMap, vlanId)
 	delete(self.vniVlanMap, vni)
 
+	// make sure there are no endpoints still installed in this vlan
+	for _, endpoint := range self.endpointDb {
+		if (vni != 0) && (endpoint.Vni == vni) {
+			log.Fatalf("Vlan %d still has routes. Route: %+v", vlanId, endpoint)
+		}
+	}
 	// Call the datapath
 	return self.datapath.RemoveVlan(vlanId, vni, Vrf)
 }
@@ -642,10 +596,6 @@ func (self *OfnetAgent) EndpointAdd(epreg *OfnetEndpoint, ret *bool) error {
 		return nil
 	}
 
-	// Dont handle other endpointDB operations during this time
-	self.lockDB()
-	defer self.unlockDB()
-
 	// Check if we have the endpoint already and which is more recent
 	oldEp := self.endpointDb[epreg.EndpointID]
 	if oldEp != nil {
@@ -688,10 +638,6 @@ func (self *OfnetAgent) EndpointDel(epreg *OfnetEndpoint, ret *bool) error {
 		return nil
 	}
 
-	// Dont handle endpointDB operations during this time
-	self.lockDB()
-	defer self.unlockDB()
-
 	// Uninstall the endpoint from datapath
 	err := self.datapath.RemoveEndpoint(epreg)
 	if err != nil {
@@ -730,7 +676,7 @@ func (self *OfnetAgent) AddBgp(routerIP string, As string, neighborAs string, pe
 
 	go self.protopath.StartProtoServer(routerInfo)
 
-	err := self.protopath.AddProtoNeighbor(neighborInfo)
+	err := self.protopath.AddProtoNeighbor(neighborInfo, As)
 	if err != nil {
 		log.Errorf("Error adding protocol neighbor")
 		return err

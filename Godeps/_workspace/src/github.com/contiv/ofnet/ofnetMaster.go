@@ -31,8 +31,6 @@ import (
 
 // Ofnet master state
 type OfnetMaster struct {
-	myAddr      string       // Address where we are listening
-	myPort      uint16       // port where we are listening
 	rpcServer   *rpc.Server  // json-rpc server
 	rpcListener net.Listener // Listener
 	masterMutex sync.Mutex   // Mutex to lock master datastructures
@@ -48,13 +46,11 @@ type OfnetMaster struct {
 }
 
 // Create new Ofnet master
-func NewOfnetMaster(myAddr string, portNo uint16) *OfnetMaster {
+func NewOfnetMaster(portNo uint16) *OfnetMaster {
 	// Create the master
 	master := new(OfnetMaster)
 
 	// Init params
-	master.myAddr = myAddr
-	master.myPort = portNo
 	master.agentDb = make(map[string]*OfnetNode)
 	master.endpointDb = make(map[string]*OfnetEndpoint)
 	master.policyDb = make(map[string]*OfnetPolicyRule)
@@ -76,25 +72,6 @@ func NewOfnetMaster(myAddr string, portNo uint16) *OfnetMaster {
 func (self *OfnetMaster) Delete() error {
 	self.rpcListener.Close()
 	time.Sleep(100 * time.Millisecond)
-
-	return nil
-}
-
-// AddNode adds a node by calling MasterAdd rpc call on the node
-func (self *OfnetMaster) AddNode(hostInfo OfnetNode) error {
-	var resp bool
-
-	// my info
-	myInfo := new(OfnetNode)
-	myInfo.HostAddr = self.myAddr
-	myInfo.HostPort = self.myPort
-
-	client := rpcHub.Client(hostInfo.HostAddr, hostInfo.HostPort)
-	err := client.Call("OfnetAgent.AddMaster", myInfo, &resp)
-	if err != nil {
-		log.Errorf("Error calling AddMaster rpc call on node %v. Err: %v", hostInfo, err)
-		return err
-	}
 
 	return nil
 }
@@ -126,7 +103,6 @@ func (self *OfnetMaster) RegisterNode(hostInfo *OfnetNode, ret *bool) error {
 			err := client.Call("OfnetAgent.EndpointAdd", endpoint, &resp)
 			if err != nil {
 				log.Errorf("Error adding endpoint to %s. Err: %v", node.HostAddr, err)
-				// continue sending other endpoints
 			}
 		}
 	}
@@ -141,7 +117,7 @@ func (self *OfnetMaster) RegisterNode(hostInfo *OfnetNode, ret *bool) error {
 		err := client.Call("PolicyAgent.AddRule", rule, &resp)
 		if err != nil {
 			log.Errorf("Error adding rule to %s. Err: %v", node.HostAddr, err)
-			// continue sending other rules
+			return err
 		}
 	}
 
@@ -175,7 +151,7 @@ func (self *OfnetMaster) EndpointAdd(ep *OfnetEndpoint, ret *bool) error {
 			err := client.Call("OfnetAgent.EndpointAdd", ep, &resp)
 			if err != nil {
 				log.Errorf("Error adding endpoint to %s. Err: %v", node.HostAddr, err)
-				// Continue sending the message to other nodes
+				return err
 			}
 		}
 	}
@@ -189,7 +165,6 @@ func (self *OfnetMaster) EndpointDel(ep *OfnetEndpoint, ret *bool) error {
 	// Check if we have the endpoint, if we dont have the endpoint, nothing to do
 	oldEp := self.endpointDb[ep.EndpointID]
 	if oldEp == nil {
-		log.Errorf("Received endpoint DELETE on a non existing endpoint %+v", ep)
 		return nil
 	}
 
@@ -212,7 +187,7 @@ func (self *OfnetMaster) EndpointDel(ep *OfnetEndpoint, ret *bool) error {
 			err := client.Call("OfnetAgent.EndpointDel", ep, &resp)
 			if err != nil {
 				log.Errorf("Error sending DELERE endpoint to %s. Err: %v", node.HostAddr, err)
-				// Continue sending the message to other nodes
+				return err
 			}
 		}
 	}
@@ -221,6 +196,43 @@ func (self *OfnetMaster) EndpointDel(ep *OfnetEndpoint, ret *bool) error {
 	return nil
 }
 
+// AttachPolicy adds a new rule to the policyDB - SRTE
+func (self *OfnetMaster) AttachPolicy(ofnetPolicy *OfnetPolicy) error {
+
+	for _, node := range self.agentDb {
+		var resp bool
+
+		log.Infof("Sending attach policy:  to node %s:%d", node.HostAddr, node.HostPort)
+
+		client := rpcHub.Client(node.HostAddr, node.HostPort)
+		err := client.Call("PolicyAgent.AttachPolicy", ofnetPolicy, &resp)
+		if err != nil {
+			log.Errorf("Error attaching policy  to %s. Err: %v", node.HostAddr, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DetachPolicy deletes policy info from policyDB - SRTE
+func (self *OfnetMaster) DetachPolicy(epgPolicyKey string) error {
+
+	for _, node := range self.agentDb {
+		var resp bool
+
+		log.Infof("Sending detach policy:  to node %s:%d", node.HostAddr, node.HostPort)
+
+		client := rpcHub.Client(node.HostAddr, node.HostPort)
+		err := client.Call("PolicyAgent.DetachPolicy", epgPolicyKey, &resp)
+		if err != nil {
+			log.Errorf("Error detaching policy  to %s. Err: %v", node.HostAddr, err)
+			return err
+		}
+	}
+
+	return nil
+}
 // AddRule adds a new rule to the policyDB
 func (self *OfnetMaster) AddRule(rule *OfnetPolicyRule) error {
 	// Check if we have the rule already
@@ -241,7 +253,7 @@ func (self *OfnetMaster) AddRule(rule *OfnetPolicyRule) error {
 		err := client.Call("PolicyAgent.AddRule", rule, &resp)
 		if err != nil {
 			log.Errorf("Error adding rule to %s. Err: %v", node.HostAddr, err)
-			// Continue sending the message to other nodes
+			return err
 		}
 	}
 
@@ -268,7 +280,7 @@ func (self *OfnetMaster) DelRule(rule *OfnetPolicyRule) error {
 		err := client.Call("PolicyAgent.DelRule", rule, &resp)
 		if err != nil {
 			log.Errorf("Error adding rule to %s. Err: %v", node.HostAddr, err)
-			// Continue sending the message to other nodes
+			return err
 		}
 	}
 
@@ -288,7 +300,7 @@ func (self *OfnetMaster) MakeDummyRpcCall() error {
 		err := client.Call("OfnetAgent.DummyRpc", &dummyArg, &resp)
 		if err != nil {
 			log.Errorf("Error making dummy rpc call to %+v. Err: %v", node, err)
-			// Continue sending the message to other nodes
+			return err
 		}
 	}
 

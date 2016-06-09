@@ -19,7 +19,6 @@ package rpcHub
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/rpc"
 	"net/rpc/jsonrpc"
@@ -69,8 +68,8 @@ func dialRpcClient(servAddr string, portNo uint16) (*rpc.Client, net.Conn) {
 	var err error
 	log.Infof("Connecting to RPC server: %s:%d", servAddr, portNo)
 
-	// Retry connecting for 5sec and then give up
-	for i := 0; i < 5; i++ {
+	// Retry connecting for 10sec
+	for i := 0; i < 10; i++ {
 		// Connect to the server
 		conn, err = net.Dial("tcp", fmt.Sprintf("%s:%d", servAddr, portNo))
 		if err == nil {
@@ -144,12 +143,10 @@ func (self *RpcClient) Call(serviceMethod string, args interface{}, reply interf
 	}
 
 	// Check if we need to reconnect
-	if err == rpc.ErrShutdown || err == io.ErrUnexpectedEOF {
-		self.client, self.conn = dialRpcClient(self.servAddr, self.portNo)
-		if self.client == nil {
-			log.Errorf("Error calling RPC: %s. Could not connect to server", serviceMethod)
-			return errors.New("Could not connect to server")
-		}
+	if err == rpc.ErrShutdown {
+		client, conn := dialRpcClient(self.servAddr, self.portNo)
+		self.client = client
+		self.conn = conn
 
 		// Retry making the call
 		return self.client.Call(serviceMethod, args, reply)

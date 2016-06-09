@@ -1,5 +1,5 @@
-
-rtPath": "github.com/karamsivia/netplugin",
+{
+	"ImportPath": "github.com/contiv/netplugin",
 	"GoVersion": "go1.5.1",
 	"GodepVersion": "v74",
 	"Packages": [
@@ -7,67 +7,58 @@ rtPath": "github.com/karamsivia/netplugin",
 	],
 	"Deps": [
 		{
-                        "ImportPath": "github.com/BurntSushi/toml",
-                        "Comment": "v0.1.0-21-g056c9bc",
-                        "Rev": "056c9bc7be7190eaa7715723883caffa5f8fa3e4"
-                },
-                {
-                        "ImportPath": "github.com/Microsoft/go-winio",
-                        "Comment": "v0.3.2",
-                        "Rev": "862b6557927a5c5c81e411c12aa6de7e566cbb7a"
-                },
-                {
-                        "ImportPath": "github.com/Sirupsen/logrus",
-                        "Comment": "v0.8.7-55-gf7f79f7",
-                        "Rev": "f7f79f729e0fbe2fcc061db48a9ba0263f588252"
-                },
-                {
-                        "ImportPath": "github.com/Sirupsen/logrus/hooks/syslog",
-                        "Comment": "v0.8.7-55-gf7f79f7",
-                        "Rev": "f7f79f729e0fbe2fcc061db48a9ba0263f588252"
-                },
-                {
-                        "ImportPath": "github.com/armon/go-radix",
-                        "Rev": "fbd82e84e2b13651f3abc5ffd26b65ba71bc8f93"
-                },
-		{
-			"ImportPath": "github.com/cenk/hub",
-			"Comment": "v1.0.0-19-g11382a9",
-			"Rev": "11382a9960d39b0ecda16fd01c424c11ff765a34"
+			"ImportPath": "github.com/BurntSushi/toml",
+			"Comment": "v0.2.0-9-gf0aeabc",
+			"Rev": "f0aeabca5a127c4078abb8c8d64298b147264b55"
 		},
 		{
-			"ImportPath": "github.com/cenk/rpc2",
-			"Rev": "7ab76d2e88c77ca1a715756036d8264b2886acd2"
+			"ImportPath": "github.com/Microsoft/go-winio",
+			"Comment": "v0.3.5",
+			"Rev": "4f1a71750d95a5a8a46c40a67ffbed8129c2f138"
 		},
 		{
-                        "ImportPath": "github.com/cenkalti/backoff",
-                        "Rev": "4dc77674aceaabba2c7e3da25d4c823edfb73f99"
-                },
-                {
-                        "ImportPath": "github.com/cenkalti/hub",
-                        "Comment": "v1.0.0-12-g7be60e1",
-                        "Rev": "7be60e186e66cd86db2d50ef2ca3778e281c87b4"
-                },
-                {
-                        "ImportPath": "github.com/cenkalti/rpc2",
-                        "Rev": "44d0d95e4f529a0fe230c90d2126bd597c61148c"
-                },
-                {
-                        "ImportPath": "github.com/cenkalti/rpc2/jsonrpc",
-                        "Rev": "44d0d95e4f529a0fe230c90d2126bd597c61148c"
-                },
-	 	{
-                        "ImportPath": "github.com/codegangsta/cli",
-                        "Comment": "1.2.0-155-g96f1fed",
-                        "Rev": "96f1fedb28e10f2e5ad3fd4b7347101529a7ca56"
-                },
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.10.0-19-gf3cfb45",
+			"Rev": "f3cfb454f4c209e6668c95216c4744b8fddb2356"
+		},
+		{
+			"ImportPath": "github.com/Sirupsen/logrus/hooks/syslog",
+			"Comment": "v0.10.0-19-gf3cfb45",
+			"Rev": "f3cfb454f4c209e6668c95216c4744b8fddb2356"
+		},
+		{
+			"ImportPath": "github.com/armon/go-radix",
+			"Rev": "4239b77079c7b5d1243b7b4736304ce8ddb6f0f2"
+		},
+		{
+			"ImportPath": "github.com/cenkalti/backoff",
+			"Rev": "4dc77674aceaabba2c7e3da25d4c823edfb73f99"
+		},
+		{
+			"ImportPath": "github.com/cenkalti/hub",
+			"Comment": "v1.0.0-12-g7be60e1",
+			"Rev": "7be60e186e66cd86db2d50ef2ca3778e281c87b4"
+		},
+		{
+			"ImportPath": "github.com/cenkalti/rpc2",
+			"Rev": "44d0d95e4f529a0fe230c90d2126bd597c61148c"
+		},
+		{
+			"ImportPath": "github.com/cenkalti/rpc2/jsonrpc",
+			"Rev": "44d0d95e4f529a0fe230c90d2126bd597c61148c"
+		},
+		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "v1.17.0-63-gfa949b4",
+			"Rev": "fa949b48f384d8916e1ca94880d665deaa1105c2"
+		},
 		{
 			"ImportPath": "github.com/contiv/contivmodel",
-			"Rev": "e2527ca6369fc69936308e33a1e0cac2297ce868"
+			"Rev": "a775f21c2844012bc00bcb7f21d58af3beca0f0f"
 		},
 		{
 			"ImportPath": "github.com/contiv/contivmodel/client",
-			"Rev": "e2527ca6369fc69936308e33a1e0cac2297ce868"
+			"Rev": "a775f21c2844012bc00bcb7f21d58af3beca0f0f"
 		},
 		{
 			"ImportPath": "github.com/contiv/go-etcd/etcd",
@@ -89,23 +80,23 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet",
-			"Rev": "2bec1e4efe6a4a7aadd520b255053b8ea487e4b7"
+			"Rev": "ace393dc4f67a84dc35e5943bbcec76e7512b86c"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/ofctrl",
-			"Rev": "2bec1e4efe6a4a7aadd520b255053b8ea487e4b7"
+			"Rev": "ace393dc4f67a84dc35e5943bbcec76e7512b86c"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/ovsdbDriver",
-			"Rev": "2bec1e4efe6a4a7aadd520b255053b8ea487e4b7"
+			"Rev": "ace393dc4f67a84dc35e5943bbcec76e7512b86c"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/pqueue",
-			"Rev": "2bec1e4efe6a4a7aadd520b255053b8ea487e4b7"
+			"Rev": "ace393dc4f67a84dc35e5943bbcec76e7512b86c"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/rpcHub",
-			"Rev": "2bec1e4efe6a4a7aadd520b255053b8ea487e4b7"
+			"Rev": "ace393dc4f67a84dc35e5943bbcec76e7512b86c"
 		},
 		{
 			"ImportPath": "github.com/contiv/systemtests-utils",
@@ -116,19 +107,24 @@ rtPath": "github.com/karamsivia/netplugin",
 			"Rev": "48c4cb2219ae88c0656a36c7b3246feff1d715e2"
 		},
 		{
-                        "ImportPath": "github.com/coreos/etcd/client",
-                        "Comment": "v2.3.0-alpha.0-1349-g7d2545c",
-                        "Rev": "7d2545c72e5cbf1f072e99537dafc3883c73740e"
-                },
+			"ImportPath": "github.com/coreos/etcd/client",
+			"Comment": "v2.3.0-84-g7d2545c",
+			"Rev": "7d2545c72e5cbf1f072e99537dafc3883c73740e"
+		},
 		{
 			"ImportPath": "github.com/coreos/etcd/etcdserver/etcdhttp/httptypes",
-			"Comment": "v2.1.0-alpha.0-51-gb24dd8e",
-			"Rev": "b24dd8e4e67d7203c5a68cd43de4f6ffcfff5e66"
+			"Comment": "v2.3.0-84-g7d2545c",
+			"Rev": "7d2545c72e5cbf1f072e99537dafc3883c73740e"
+		},
+		{
+			"ImportPath": "github.com/coreos/etcd/pkg/pathutil",
+			"Comment": "v2.3.0-84-g7d2545c",
+			"Rev": "7d2545c72e5cbf1f072e99537dafc3883c73740e"
 		},
 		{
 			"ImportPath": "github.com/coreos/etcd/pkg/types",
-			"Comment": "v2.1.0-alpha.0-51-gb24dd8e",
-			"Rev": "b24dd8e4e67d7203c5a68cd43de4f6ffcfff5e66"
+			"Comment": "v2.3.0-84-g7d2545c",
+			"Rev": "7d2545c72e5cbf1f072e99537dafc3883c73740e"
 		},
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
@@ -136,28 +132,38 @@ rtPath": "github.com/karamsivia/netplugin",
 			"Rev": "73a8ef737e8ea002281a28b4cb92a1de121ad4c6"
 		},
 		{
+			"ImportPath": "github.com/coreos/go-systemd/journal",
+			"Comment": "v9",
+			"Rev": "6dc8b843c670f2027cc26b164935635840a40526"
+		},
+		{
+			"ImportPath": "github.com/coreos/pkg/capnslog",
+			"Comment": "v2-2-gdb59686",
+			"Rev": "db59686ef7fbc1c63a2325fe702be75bcfe7eedf"
+		},
+		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
 			"Rev": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d"
 		},
 		{
 			"ImportPath": "github.com/docker/docker/pkg/plugins",
-			"Comment": "v1.4.1-12630-gf6ff9ac",
-			"Rev": "f6ff9acc63a0e8203a36e2e357059089923c2a49"
+			"Comment": "v1.4.1-12666-g6717b35",
+			"Rev": "6717b355034e81659cd8144590eaa7ac8c573fba"
 		},
 		{
 			"ImportPath": "github.com/docker/docker/pkg/plugins/transport",
-			"Comment": "v1.4.1-12630-gf6ff9ac",
-			"Rev": "f6ff9acc63a0e8203a36e2e357059089923c2a49"
+			"Comment": "v1.4.1-12666-g6717b35",
+			"Rev": "6717b355034e81659cd8144590eaa7ac8c573fba"
 		},
 		{
 			"ImportPath": "github.com/docker/go-connections/sockets",
-			"Comment": "v0.2.0-6-gc7838b2",
-			"Rev": "c7838b258fbfa3fe88eecfb2a0e08ea0dbd6a646"
+			"Comment": "v0.2.0-8-g990a1a1",
+			"Rev": "990a1a1a70b0da4c4cb70e117971a4f0babfbf1a"
 		},
 		{
 			"ImportPath": "github.com/docker/go-connections/tlsconfig",
-			"Comment": "v0.2.0-6-gc7838b2",
-			"Rev": "c7838b258fbfa3fe88eecfb2a0e08ea0dbd6a646"
+			"Comment": "v0.2.0-8-g990a1a1",
+			"Rev": "990a1a1a70b0da4c4cb70e117971a4f0babfbf1a"
 		},
 		{
 			"ImportPath": "github.com/docker/go-units",
@@ -166,38 +172,33 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "github.com/docker/libnetwork/discoverapi",
-			"Comment": "v0.8.0-dev.2-66-g6912c33",
-			"Rev": "6912c33b712148258039eb9ab66b9c30723e7550"
+			"Comment": "v0.8.0-dev.2-72-g17a3a1f",
+			"Rev": "17a3a1ffcab7075c78cd7691519b6d1bb2682633"
 		},
 		{
 			"ImportPath": "github.com/docker/libnetwork/driverapi",
-			"Comment": "v0.8.0-dev.2-66-g6912c33",
-			"Rev": "6912c33b712148258039eb9ab66b9c30723e7550"
+			"Comment": "v0.8.0-dev.2-72-g17a3a1f",
+			"Rev": "17a3a1ffcab7075c78cd7691519b6d1bb2682633"
 		},
 		{
 			"ImportPath": "github.com/docker/libnetwork/drivers/remote/api",
-			"Comment": "v0.8.0-dev.2-66-g6912c33",
-			"Rev": "6912c33b712148258039eb9ab66b9c30723e7550"
+			"Comment": "v0.8.0-dev.2-72-g17a3a1f",
+			"Rev": "17a3a1ffcab7075c78cd7691519b6d1bb2682633"
 		},
 		{
 			"ImportPath": "github.com/docker/libnetwork/ipamapi",
-			"Comment": "v0.8.0-dev.2-66-g6912c33",
-			"Rev": "6912c33b712148258039eb9ab66b9c30723e7550"
+			"Comment": "v0.8.0-dev.2-72-g17a3a1f",
+			"Rev": "17a3a1ffcab7075c78cd7691519b6d1bb2682633"
 		},
 		{
 			"ImportPath": "github.com/docker/libnetwork/ipams/remote/api",
-			"Comment": "v0.8.0-dev.2-66-g6912c33",
-			"Rev": "6912c33b712148258039eb9ab66b9c30723e7550"
-		},
-		{
-			"ImportPath": "github.com/docker/libnetwork/netlabel",
-			"Comment": "v0.8.0-dev.2-66-g6912c33",
-			"Rev": "6912c33b712148258039eb9ab66b9c30723e7550"
+			"Comment": "v0.8.0-dev.2-72-g17a3a1f",
+			"Rev": "17a3a1ffcab7075c78cd7691519b6d1bb2682633"
 		},
 		{
 			"ImportPath": "github.com/docker/libnetwork/types",
-			"Comment": "v0.8.0-dev.2-66-g6912c33",
-			"Rev": "6912c33b712148258039eb9ab66b9c30723e7550"
+			"Comment": "v0.8.0-dev.2-72-g17a3a1f",
+			"Rev": "17a3a1ffcab7075c78cd7691519b6d1bb2682633"
 		},
 		{
 			"ImportPath": "github.com/eapache/channels",
@@ -216,7 +217,7 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "github.com/golang/protobuf/proto",
-			"Rev": "3b06fc7a4cad73efce5fe6217ab6c33e7231ab4a"
+			"Rev": "8616e8ee5e20a1704615e6c8d7afcdac06087a67"
 		},
 		{
 			"ImportPath": "github.com/gorilla/context",
@@ -230,8 +231,8 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "github.com/hashicorp/consul/api",
-			"Comment": "v0.6.4-361-g4ea2e35",
-			"Rev": "4ea2e35ff15658187dfe3754272641fb1f9b1c4c"
+			"Comment": "v0.6.4-367-g14ec46b",
+			"Rev": "14ec46b3cf8edf6fdd3f4bda8deacdfb6d4e9a73"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/go-cleanhttp",
@@ -280,47 +281,23 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "github.com/influxdata/influxdb/client/v2",
-			"Comment": "v1.0.0-beta1-7-g0224797",
-			"Rev": "022479778d151cee2095464023e2956dd38c7020"
+			"Comment": "v1.0.0-beta1-13-g256f57a",
+			"Rev": "256f57a4f4ea8ce5795973c596c9a12821ab7af8"
 		},
 		{
 			"ImportPath": "github.com/influxdata/influxdb/models",
-			"Comment": "v1.0.0-beta1-7-g0224797",
-			"Rev": "022479778d151cee2095464023e2956dd38c7020"
+			"Comment": "v1.0.0-beta1-13-g256f57a",
+			"Rev": "256f57a4f4ea8ce5795973c596c9a12821ab7af8"
 		},
 		{
 			"ImportPath": "github.com/influxdata/influxdb/pkg/escape",
-			"Comment": "v1.0.0-beta1-7-g0224797",
-			"Rev": "022479778d151cee2095464023e2956dd38c7020"
+			"Comment": "v1.0.0-beta1-13-g256f57a",
+			"Rev": "256f57a4f4ea8ce5795973c596c9a12821ab7af8"
 		},
 		{
 			"ImportPath": "github.com/jainvipin/bitset",
 			"Comment": "v1.0.0-12-g1f0c6de",
 			"Rev": "1f0c6de81a62732e75f6c97f1e28e5a009b5df68"
-		},
-		{
-			"ImportPath": "github.com/karamsivia/contivmodel",
-			"Rev": "a775f21c2844012bc00bcb7f21d58af3beca0f0f"
-		},
-		{
-			"ImportPath": "github.com/karamsivia/ofnet",
-			"Rev": "54e8363d8c2aec81f5e7580241587ee3d2975ebf"
-		},
-		{
-			"ImportPath": "github.com/karamsivia/ofnet/ofctrl",
-			"Rev": "54e8363d8c2aec81f5e7580241587ee3d2975ebf"
-		},
-		{
-			"ImportPath": "github.com/karamsivia/ofnet/ovsdbDriver",
-			"Rev": "54e8363d8c2aec81f5e7580241587ee3d2975ebf"
-		},
-		{
-			"ImportPath": "github.com/karamsivia/ofnet/pqueue",
-			"Rev": "54e8363d8c2aec81f5e7580241587ee3d2975ebf"
-		},
-		{
-			"ImportPath": "github.com/karamsivia/ofnet/rpcHub",
-			"Rev": "54e8363d8c2aec81f5e7580241587ee3d2975ebf"
 		},
 		{
 			"ImportPath": "github.com/magiconair/properties",
@@ -333,40 +310,54 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "github.com/opencontainers/runc/libcontainer/user",
-			"Comment": "v1.0.0-rc1-11-ge34cb45",
-			"Rev": "e34cb45a49beb83ababfa32df43b8e7e27f0ac51"
+			"Comment": "v1.0.0-rc1-13-geb217f2",
+			"Rev": "eb217f273125d3e4d6731389fe804e46e0b14ac6"
 		},
 		{
-                        "ImportPath": "github.com/osrg/gobgp/api",
-                        "Comment": "v1.2",
-                        "Rev": "e84989706157ffd7b895f42e4057e3f8ca382b3d"
-                },
-                {
-                        "ImportPath": "github.com/osrg/gobgp/config",
-                        "Comment": "v1.2",
-                        "Rev": "e84989706157ffd7b895f42e4057e3f8ca382b3d"
-                },
-                {
-                        "ImportPath": "github.com/osrg/gobgp/packet",
-                        "Comment": "v1.2",
-                        "Rev": "e84989706157ffd7b895f42e4057e3f8ca382b3d"
-                },
-                {
-                        "ImportPath": "github.com/osrg/gobgp/server",
-                        "Comment": "v1.2",
-                        "Rev": "e84989706157ffd7b895f42e4057e3f8ca382b3d"
-                },
-                {
-                        "ImportPath": "github.com/osrg/gobgp/table",
-                        "Comment": "v1.2",
-                        "Rev": "e84989706157ffd7b895f42e4057e3f8ca382b3d"
-                },
-                {
-                        "ImportPath": "github.com/osrg/gobgp/zebra",
-                        "Comment": "v1.2",
-                        "Rev": "e84989706157ffd7b895f42e4057e3f8ca382b3d"
-                },
-
+			"ImportPath": "github.com/osrg/gobgp/api",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/config",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/packet/bgp",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/packet/bmp",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/packet/mrt",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/packet/rtr",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/server",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/table",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
+		{
+			"ImportPath": "github.com/osrg/gobgp/zebra",
+			"Comment": "v1.8-9-g50bf0d3",
+			"Rev": "50bf0d34d31c8f745e58b0f172c86fb617b92bf8"
+		},
 		{
 			"ImportPath": "github.com/pmezard/go-difflib/difflib",
 			"Rev": "792786c7400a136282c1664665ae0a8db921c6c2"
@@ -418,6 +409,10 @@ rtPath": "github.com/karamsivia/netplugin",
 			"Rev": "8d64eb7173c7753d6419fd4a9caf057398611364"
 		},
 		{
+			"ImportPath": "github.com/ugorji/go/codec",
+			"Rev": "b94837a2404ab90efe9289e77a70694c355739cb"
+		},
+		{
 			"ImportPath": "github.com/vishvananda/netlink",
 			"Rev": "7995ff5647a22cbf0dc41bf5c0e977bdb0d5c6b7"
 		},
@@ -447,35 +442,35 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context/ctxhttp",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2/hpack",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/net/internal/timeseries",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/net/lex/httplex",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/net/proxy",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/net/trace",
-			"Rev": "154d9f9ea81208afed560f4cf27b4860c8ed1904"
+			"Rev": "313cf39d4ac368181bce6960ac9be9e7cee67e68"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
@@ -487,39 +482,39 @@ rtPath": "github.com/karamsivia/netplugin",
 		},
 		{
 			"ImportPath": "google.golang.org/grpc",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/codes",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/credentials",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/grpclog",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/internal",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/metadata",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/naming",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/peer",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc/transport",
-			"Rev": "b60d3e9ed84da5710af43964e78bc44de74b72aa"
+			"Rev": "4c2aaab42efd64c253e2eea35d987a74a1c8c20d"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
@@ -529,5 +524,9 @@ rtPath": "github.com/karamsivia/netplugin",
 			"ImportPath": "gopkg.in/tomb.v2",
 			"Rev": "14b3d72120e8d10ea6e6b7f87f7175734b1faab8"
 		},
+		{
+			"ImportPath": "gopkg.in/yaml.v2",
+			"Rev": "a83829b6f1293c91addabc89d0571c246397bbf4"
+		}
 	]
 }

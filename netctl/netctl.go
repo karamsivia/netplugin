@@ -13,7 +13,7 @@ import (
 	"github.com/codegangsta/cli"
 	contivClient "github.com/contiv/contivmodel/client"
 	log "github.com/Sirupsen/logrus"
-	"github.com/karamsivia/netplugin/version"
+	"github.com/contiv/netplugin/version"
 )
 
 // DefaultMaster is the master to use when none is provided.

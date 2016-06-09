@@ -35,15 +35,14 @@ type FlowMatch struct {
 	MacSaMask    *net.HardwareAddr // Mac source mask
 	Ethertype    uint16            // Ethertype
 	VlanId       uint16            // vlan id
+	VlanIdMask	 *uint16 			   // vlan mask -SRTE
+	MplsLabel    uint32		   	   // Mpls Label  - SRTE
+	MplsBos      uint8		   	   // Mpls Bos  - SRTE
 	ArpOper      uint16            // ARP Oper type
 	IpSa         *net.IP
 	IpSaMask     *net.IP
 	IpDa         *net.IP
 	IpDaMask     *net.IP
-	Ipv6Sa       *net.IP
-	Ipv6SaMask   *net.IP
-	Ipv6Da       *net.IP
-	Ipv6DaMask   *net.IP
 	IpProto      uint8
 	TcpSrcPort   uint16
 	TcpDstPort   uint16
@@ -60,6 +59,7 @@ type FlowMatch struct {
 type FlowAction struct {
 	actionType   string           // Type of action "setVlan", "setMetadata"
 	vlanId       uint16           // Vlan Id in case of "setVlan"
+	mplsLabel    uint32			  // mpls label - SRTE
 	macAddr      net.HardwareAddr // Mac address to set
 	ipAddr       net.IP           // IP address to be set
 	l4Port       uint16           // Transport port to be set
@@ -143,9 +143,27 @@ func (self *Flow) xlateMatch() openflow13.Match {
 	}
 
 	// Handle Vlan id
-	if self.Match.VlanId != 0 {
-		vidField := openflow13.NewVlanIdField(self.Match.VlanId, nil)
-		ofMatch.AddField(*vidField)
+	if self.Match.VlanId != 0  {
+		if self.Match.VlanIdMask != nil {
+			vidField := openflow13.NewVlanIdField(self.Match.VlanId, self.Match.VlanIdMask )
+			ofMatch.AddField(*vidField)
+		} else {
+			vidField := openflow13.NewVlanIdField(self.Match.VlanId, nil )
+			ofMatch.AddField(*vidField)
+		}
+	}
+
+
+	// Handle MPLS Label -SRTE
+	if self.Match.MplsLabel != 0 {
+		mplsLabelField := openflow13.NewMplsLabelField(self.Match.MplsLabel)
+		ofMatch.AddField(*mplsLabelField)
+	}
+
+	// Handle MPLS Bos -SRTE
+	if self.Match.MplsBos != 0 {
+		mplsBosField := openflow13.NewMplsBosField(self.Match.MplsBos)
+		ofMatch.AddField(*mplsBosField)
 	}
 
 	// Handle ARP Oper type
@@ -173,28 +191,6 @@ func (self *Flow) xlateMatch() openflow13.Match {
 		} else {
 			ipSaField := openflow13.NewIpv4SrcField(*self.Match.IpSa, nil)
 			ofMatch.AddField(*ipSaField)
-		}
-	}
-
-	// Handle IPv6 Dst
-	if self.Match.Ipv6Da != nil {
-		if self.Match.Ipv6DaMask != nil {
-			ipv6DaField := openflow13.NewIpv6DstField(*self.Match.Ipv6Da, self.Match.Ipv6DaMask)
-			ofMatch.AddField(*ipv6DaField)
-		} else {
-			ipv6DaField := openflow13.NewIpv6DstField(*self.Match.Ipv6Da, nil)
-			ofMatch.AddField(*ipv6DaField)
-		}
-	}
-
-	// Handle IPv6 Src
-	if self.Match.Ipv6Sa != nil {
-		if self.Match.Ipv6SaMask != nil {
-			ipv6SaField := openflow13.NewIpv6SrcField(*self.Match.Ipv6Sa, self.Match.Ipv6SaMask)
-			ofMatch.AddField(*ipv6SaField)
-		} else {
-			ipv6SaField := openflow13.NewIpv6SrcField(*self.Match.Ipv6Sa, nil)
-			ofMatch.AddField(*ipv6SaField)
 		}
 	}
 
@@ -265,6 +261,86 @@ func (self *Flow) installFlowActions(flowMod *openflow13.FlowMod,
 	// Loop thru all actions
 	for _, flowAction := range self.flowActions {
 		switch flowAction.actionType {
+		case "pushMpls": //SRTE
+			// Push mpls Tag action
+			pushMplsAction := openflow13.NewActionPushMpls(0x8847)
+
+			// Set Outer mpls label field
+			mplsLabelField := openflow13.NewMplsLabelField(flowAction.mplsLabel)
+			setMplsAction := openflow13.NewActionSetField(*mplsLabelField)
+
+			// Prepend push mpls & setlabel actions to existing instruction
+			actInstr.AddAction(setMplsAction, true)
+			actInstr.AddAction(pushMplsAction, true)
+						
+			addActn = true
+
+			log.Debugf("flow install. Added mpls action: %+v, setMpls actions: %+v",
+				pushMplsAction, setMplsAction)
+		case "popVlanPushMpls": //SRTE
+			// Push mpls Tag action
+			pushMplsAction := openflow13.NewActionPushMpls(0x8847)
+
+			// Set Outer mpls label field
+			mplsLabelField := openflow13.NewMplsLabelField(flowAction.mplsLabel)
+			setMplsAction := openflow13.NewActionSetField(*mplsLabelField)
+
+			// Prepend push mpls & setlabel actions to existing instruction
+			actInstr.AddAction(setMplsAction, true)
+			actInstr.AddAction(pushMplsAction, true)
+
+			// Create pop vlan action 
+			popVlan := openflow13.NewActionPopVlan()
+
+			// Add it to instruction
+			actInstr.AddAction(popVlan, true)
+				
+			addActn = true
+
+			log.Debugf("flow install. Added pop vlan action: %+v,  and Added mpls action: %+v, setMpls actions: %+v",
+				popVlan, pushMplsAction, setMplsAction)
+		case "popMplsPushVlan": //SRTE
+			// Push Vlan Tag action
+			pushVlanAction := openflow13.NewActionPushVlan(0x8100)
+
+			// Set Outer vlan tag field
+			vlanField := openflow13.NewVlanIdField(flowAction.vlanId, nil)
+			setVlanAction := openflow13.NewActionSetField(*vlanField)
+
+			// Prepend push vlan & setvlan actions to existing instruction
+			actInstr.AddAction(setVlanAction, true)
+			actInstr.AddAction(pushVlanAction, true)
+
+			//popmpls action
+			popMplsAction := openflow13.NewActionPopMpls(0x0800)
+			
+			actInstr.AddAction(popMplsAction, true)
+			
+			addActn = true
+			log.Debugf("flow install. Added pop mpls action: %+v,  and Added push vlan action: %+v, setVlan actions: %+v",
+				popMplsAction, setVlanAction, vlanField)
+		case "swapMpls": //SRTE - Test this 
+			// Set Outer mpls label field
+			mplsLabelField := openflow13.NewMplsLabelField(flowAction.mplsLabel)
+			setMplsAction := openflow13.NewActionSetField(*mplsLabelField)
+
+			// Prepend push mpls & setlabel actions to existing instruction
+			actInstr.AddAction(setMplsAction, true)
+			
+			
+			addActn = true
+
+			log.Debugf("flow install. Added swap mpls - setMpls actions: %+v", setMplsAction)
+		case "popMpls": //SRTE
+			// Pop mpls Tag action
+			popMplsAction := openflow13.NewActionPopMpls(0x0800)
+			
+			actInstr.AddAction(popMplsAction, true)
+	
+			addActn = true
+		
+			log.Debugf("flow install. Pop mpls action: %+v",
+				popMplsAction)
 		case "setVlan":
 			// Push Vlan Tag action
 			pushVlanAction := openflow13.NewActionPushVlan(0x8100)
@@ -485,6 +561,87 @@ func (self *Flow) Next(elem FgraphElem) error {
 	// Install the flow entry
 	return self.install()
 }
+// Special actions on the flow to pop mpls and push vlan -SRTE
+func (self *Flow) PopMplsPushVlan(vlanId uint16) error {
+	action := new(FlowAction)
+	action.actionType = "popMplsPushVlan"
+	action.vlanId = vlanId
+
+	self.flowActions = append(self.flowActions, action)
+
+	// If the flow entry was already installed, re-install it
+	if self.isInstalled {
+		self.install()
+	}
+	return nil 
+}
+
+
+// Special actions on the flow to pop vlan and push mpls -SRTE
+func (self *Flow) PopVlanPushMpls(mplsLabel uint32) error {
+	action := new(FlowAction)
+	action.actionType = "popVlanPushMpls"
+	action.mplsLabel = mplsLabel
+
+	// Add to the action list
+	self.flowActions = append(self.flowActions, action)
+
+	// If the flow entry was already installed, re-install it
+	if self.isInstalled {
+		self.install()
+	}
+	return nil 
+}
+
+// Special actions on the flow to push mpls -SRTE
+func (self *Flow) PushMpls(mplsLabel uint32) error {
+	action := new(FlowAction)
+	action.actionType = "pushMpls"
+	action.mplsLabel = mplsLabel
+
+	// Add to the action list
+	self.flowActions = append(self.flowActions, action)
+
+	// If the flow entry was already installed, re-install it
+	if self.isInstalled {
+		self.install()
+	}
+
+	return nil 
+}
+
+// Special actions on the flow to swap mpls label -SRTE
+func (self *Flow) SwapMpls(mplsLabel uint32) error {
+	action := new(FlowAction)
+	action.actionType = "swapMpls"
+	action.mplsLabel = mplsLabel
+
+	// Add to the action list
+	self.flowActions = append(self.flowActions, action)
+
+	// If the flow entry was already installed, re-install it
+	if self.isInstalled {
+		self.install()
+	}
+
+	return nil 
+}
+
+// Special actions on the flow to pop Mpls
+func (self *Flow) PopMpls() error {
+	action := new(FlowAction)
+	action.actionType = "popMpls"
+
+	self.flowActions = append(self.flowActions, action)
+
+	// If the flow entry was already installed, re-install it
+	if self.isInstalled {
+		self.install()
+	}
+
+	return nil
+}
+
 
 // Special actions on the flow to set vlan id
 func (self *Flow) SetVlan(vlanId uint16) error {

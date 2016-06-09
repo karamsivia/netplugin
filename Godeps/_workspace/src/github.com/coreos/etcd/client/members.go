@@ -29,6 +29,7 @@ import (
 
 var (
 	defaultV2MembersPrefix = "/v2/members"
+	defaultLeaderSuffix    = "/leader"
 )
 
 type Member struct {
@@ -67,11 +68,11 @@ func (c *memberCollection) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type memberCreateRequest struct {
+type memberCreateOrUpdateRequest struct {
 	PeerURLs types.URLs
 }
 
-func (m *memberCreateRequest) MarshalJSON() ([]byte, error) {
+func (m *memberCreateOrUpdateRequest) MarshalJSON() ([]byte, error) {
 	s := struct {
 		PeerURLs []string `json:"peerURLs"`
 	}{
@@ -102,6 +103,12 @@ type MembersAPI interface {
 
 	// Remove demotes an existing Member out of the cluster.
 	Remove(ctx context.Context, mID string) error
+
+	// Update instructs etcd to update an existing Member in the cluster.
+	Update(ctx context.Context, mID string, peerURLs []string) error
+
+	// Leader gets current leader of the cluster
+	Leader(ctx context.Context) (*Member, error)
 }
 
 type httpMembersAPI struct {
@@ -159,6 +166,33 @@ func (m *httpMembersAPI) Add(ctx context.Context, peerURL string) (*Member, erro
 	return &memb, nil
 }
 
+func (m *httpMembersAPI) Update(ctx context.Context, memberID string, peerURLs []string) error {
+	urls, err := types.NewURLs(peerURLs)
+	if err != nil {
+		return err
+	}
+
+	req := &membersAPIActionUpdate{peerURLs: urls, memberID: memberID}
+	resp, body, err := m.client.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if err := assertStatusCode(resp.StatusCode, http.StatusNoContent, http.StatusNotFound, http.StatusConflict); err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusNoContent {
+		var merr membersError
+		if err := json.Unmarshal(body, &merr); err != nil {
+			return err
+		}
+		return merr
+	}
+
+	return nil
+}
+
 func (m *httpMembersAPI) Remove(ctx context.Context, memberID string) error {
 	req := &membersAPIActionRemove{memberID: memberID}
 	resp, _, err := m.client.Do(ctx, req)
@@ -167,6 +201,25 @@ func (m *httpMembersAPI) Remove(ctx context.Context, memberID string) error {
 	}
 
 	return assertStatusCode(resp.StatusCode, http.StatusNoContent, http.StatusGone)
+}
+
+func (m *httpMembersAPI) Leader(ctx context.Context) (*Member, error) {
+	req := &membersAPIActionLeader{}
+	resp, body, err := m.client.Do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := assertStatusCode(resp.StatusCode, http.StatusOK); err != nil {
+		return nil, err
+	}
+
+	var leader Member
+	if err := json.Unmarshal(body, &leader); err != nil {
+		return nil, err
+	}
+
+	return &leader, nil
 }
 
 type membersAPIActionList struct{}
@@ -194,9 +247,24 @@ type membersAPIActionAdd struct {
 
 func (a *membersAPIActionAdd) HTTPRequest(ep url.URL) *http.Request {
 	u := v2MembersURL(ep)
-	m := memberCreateRequest{PeerURLs: a.peerURLs}
+	m := memberCreateOrUpdateRequest{PeerURLs: a.peerURLs}
 	b, _ := json.Marshal(&m)
 	req, _ := http.NewRequest("POST", u.String(), bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
+type membersAPIActionUpdate struct {
+	memberID string
+	peerURLs types.URLs
+}
+
+func (a *membersAPIActionUpdate) HTTPRequest(ep url.URL) *http.Request {
+	u := v2MembersURL(ep)
+	m := memberCreateOrUpdateRequest{PeerURLs: a.peerURLs}
+	u.Path = path.Join(u.Path, a.memberID)
+	b, _ := json.Marshal(&m)
+	req, _ := http.NewRequest("PUT", u.String(), bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
@@ -208,6 +276,15 @@ func assertStatusCode(got int, want ...int) (err error) {
 		}
 	}
 	return fmt.Errorf("unexpected status code %d", got)
+}
+
+type membersAPIActionLeader struct{}
+
+func (l *membersAPIActionLeader) HTTPRequest(ep url.URL) *http.Request {
+	u := v2MembersURL(ep)
+	u.Path = path.Join(u.Path, defaultLeaderSuffix)
+	req, _ := http.NewRequest("GET", u.String(), nil)
+	return req
 }
 
 // v2MembersURL add the necessary path to the provided endpoint
