@@ -4,35 +4,43 @@
 		{
 			"name": "endpointGroup",
 			"type": "object",
-			"key": [ "tenantName", "networkName", "groupName" ],
+			"key": [ "tenantName", "groupName" ],
 			"properties": {
 				"groupName": {
 					"type": "string",
 					"description": "Endpoint group Name",
 					"Title": "Group name",
+					"length": 64,
+					"format": "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\\\-]*[a-zA-Z0-9])\\\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\\\-]*[A-Za-z0-9])$",
 					"ShowSummary": true
 				},
 				"tenantName": {
 					"type": "string",
 					"description": "Tenant Name",
 					"Title": "Tenant",
+					"length": 64,
+					"format": "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\\\-]*[a-zA-Z0-9])\\\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\\\-]*[A-Za-z0-9])$",
 					"ShowSummary": false
 				},
 				"networkName": {
 					"type": "string",
 					"Title": "Network",
+					"length": 64,
+					"format": "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\\\-]*[a-zA-Z0-9])\\\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\\\-]*[A-Za-z0-9])$",
 					"ShowSummary": true
-				},
-				"endpointGroupId": {
-					"type": "int",
-					"Title": "Group Identifier"
 				},
 				"policies": {
 					"type": "array",
 					"items": "string",
 					"Title": "Policies",
 					"ShowSummary": true
-				}
+				},
+				"extContractsGrps": {
+                                        "type": "array",
+                                        "items": "string",
+                                        "Title": "External contracts",
+                                        "ShowSummary": true
+                                }
 			},
 			"link-sets": {
 				"services": {
@@ -40,7 +48,10 @@
 				},
 				"policies": {
 					"ref": "policy"
-				}
+				},
+                                "extContractsGrps": {
+                                        "ref": "extContractsGrp"
+                                }
 			},
 			"links": {
 				"tenant": {

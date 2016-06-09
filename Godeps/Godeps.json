@@ -54,11 +54,11 @@
 		},
 		{
 			"ImportPath": "github.com/contiv/contivmodel",
-			"Rev": "a775f21c2844012bc00bcb7f21d58af3beca0f0f"
+			"Rev": "c4c5b579471f349aec62cd8c54d5395f68b68fed"
 		},
 		{
 			"ImportPath": "github.com/contiv/contivmodel/client",
-			"Rev": "a775f21c2844012bc00bcb7f21d58af3beca0f0f"
+			"Rev": "c4c5b579471f349aec62cd8c54d5395f68b68fed"
 		},
 		{
 			"ImportPath": "github.com/contiv/libovsdb",

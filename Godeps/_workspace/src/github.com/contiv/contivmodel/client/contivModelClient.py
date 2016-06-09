@@ -74,12 +74,11 @@ class objmodelClient:
 		self.baseUrl = baseUrl
 	# Create appProfile
 	def createAppProfile(self, obj):
-	    postUrl = self.baseUrl + '/api/AppProfiles/' + obj.tenantName + ":" + obj.networkName + ":" + obj.appProfileName  + '/'
+	    postUrl = self.baseUrl + '/api/appProfiles/' + obj.tenantName + ":" + obj.appProfileName  + '/'
 
 	    jdata = json.dumps({ 
 			"appProfileName": obj.appProfileName, 
 			"endpointGroups": obj.endpointGroups, 
-			"networkName": obj.networkName, 
 			"tenantName": obj.tenantName, 
 	    })
 
@@ -90,9 +89,9 @@ class objmodelClient:
 	        errorExit("AppProfile create failure")
 
 	# Delete appProfile
-	def deleteAppProfile(self, tenantName, networkName, appProfileName):
+	def deleteAppProfile(self, tenantName, appProfileName):
 	    # Delete AppProfile
-	    deleteUrl = self.baseUrl + '/api/appProfiles/' + tenantName + ":" + networkName + ":" + appProfileName  + '/'
+	    deleteUrl = self.baseUrl + '/api/appProfiles/' + tenantName + ":" + appProfileName  + '/'
 	    response = httpDelete(deleteUrl)
 
 	    if response == "Error":
@@ -104,75 +103,6 @@ class objmodelClient:
 	    retDate = urllib2.urlopen(self.baseUrl + '/api/appProfiles/')
 	    if retData == "Error":
 	        errorExit("list AppProfile failed")
-
-	    return json.loads(retData)
-	# Create endpointGroup
-	def createEndpointGroup(self, obj):
-	    postUrl = self.baseUrl + '/api/EndpointGroups/' + obj.tenantName + ":" + obj.networkName + ":" + obj.groupName  + '/'
-
-	    jdata = json.dumps({ 
-			"endpointGroupId": obj.endpointGroupId, 
-			"groupName": obj.groupName, 
-			"networkName": obj.networkName, 
-			"policies": obj.policies, 
-			"tenantName": obj.tenantName, 
-	    })
-
-	    # Post the data
-	    response = httpPost(postUrl, jdata)
-
-	    if response == "Error":
-	        errorExit("EndpointGroup create failure")
-
-	# Delete endpointGroup
-	def deleteEndpointGroup(self, tenantName, networkName, groupName):
-	    # Delete EndpointGroup
-	    deleteUrl = self.baseUrl + '/api/endpointGroups/' + tenantName + ":" + networkName + ":" + groupName  + '/'
-	    response = httpDelete(deleteUrl)
-
-	    if response == "Error":
-	        errorExit("EndpointGroup create failure")
-
-	# List all endpointGroup objects
-	def listEndpointGroup(self):
-	    # Get a list of endpointGroup objects
-	    retDate = urllib2.urlopen(self.baseUrl + '/api/endpointGroups/')
-	    if retData == "Error":
-	        errorExit("list EndpointGroup failed")
-
-	    return json.loads(retData)
-	# Create global
-	def createGlobal(self, obj):
-	    postUrl = self.baseUrl + '/api/Globals/' + obj.name  + '/'
-
-	    jdata = json.dumps({ 
-			"name": obj.name, 
-			"network-infra-type": obj.network-infra-type, 
-			"vlans": obj.vlans, 
-			"vxlans": obj.vxlans, 
-	    })
-
-	    # Post the data
-	    response = httpPost(postUrl, jdata)
-
-	    if response == "Error":
-	        errorExit("Global create failure")
-
-	# Delete global
-	def deleteGlobal(self, name):
-	    # Delete Global
-	    deleteUrl = self.baseUrl + '/api/globals/' + name  + '/'
-	    response = httpDelete(deleteUrl)
-
-	    if response == "Error":
-	        errorExit("Global create failure")
-
-	# List all global objects
-	def listGlobal(self):
-	    # Get a list of global objects
-	    retDate = urllib2.urlopen(self.baseUrl + '/api/globals/')
-	    if retData == "Error":
-	        errorExit("list Global failed")
 
 	    return json.loads(retData)
 	# Create Bgp
@@ -210,14 +140,120 @@ class objmodelClient:
 	        errorExit("list Bgp failed")
 
 	    return json.loads(retData)
+	# Create endpointGroup
+	def createEndpointGroup(self, obj):
+	    postUrl = self.baseUrl + '/api/endpointGroups/' + obj.tenantName + ":" + obj.groupName  + '/'
+
+	    jdata = json.dumps({ 
+			"extContractsGrps": obj.extContractsGrps, 
+			"groupName": obj.groupName, 
+			"networkName": obj.networkName, 
+			"policies": obj.policies, 
+			"tenantName": obj.tenantName, 
+	    })
+
+	    # Post the data
+	    response = httpPost(postUrl, jdata)
+
+	    if response == "Error":
+	        errorExit("EndpointGroup create failure")
+
+	# Delete endpointGroup
+	def deleteEndpointGroup(self, tenantName, groupName):
+	    # Delete EndpointGroup
+	    deleteUrl = self.baseUrl + '/api/endpointGroups/' + tenantName + ":" + groupName  + '/'
+	    response = httpDelete(deleteUrl)
+
+	    if response == "Error":
+	        errorExit("EndpointGroup create failure")
+
+	# List all endpointGroup objects
+	def listEndpointGroup(self):
+	    # Get a list of endpointGroup objects
+	    retDate = urllib2.urlopen(self.baseUrl + '/api/endpointGroups/')
+	    if retData == "Error":
+	        errorExit("list EndpointGroup failed")
+
+	    return json.loads(retData)
+	# Create extContractsGroup
+	def createExtContractsGroup(self, obj):
+	    postUrl = self.baseUrl + '/api/extContractsGroups/' + obj.tenantName + ":" + obj.contractsGroupName  + '/'
+
+	    jdata = json.dumps({ 
+			"contracts": obj.contracts, 
+			"contractsGroupName": obj.contractsGroupName, 
+			"contractsType": obj.contractsType, 
+			"tenantName": obj.tenantName, 
+	    })
+
+	    # Post the data
+	    response = httpPost(postUrl, jdata)
+
+	    if response == "Error":
+	        errorExit("ExtContractsGroup create failure")
+
+	# Delete extContractsGroup
+	def deleteExtContractsGroup(self, tenantName, contractsGroupName):
+	    # Delete ExtContractsGroup
+	    deleteUrl = self.baseUrl + '/api/extContractsGroups/' + tenantName + ":" + contractsGroupName  + '/'
+	    response = httpDelete(deleteUrl)
+
+	    if response == "Error":
+	        errorExit("ExtContractsGroup create failure")
+
+	# List all extContractsGroup objects
+	def listExtContractsGroup(self):
+	    # Get a list of extContractsGroup objects
+	    retDate = urllib2.urlopen(self.baseUrl + '/api/extContractsGroups/')
+	    if retData == "Error":
+	        errorExit("list ExtContractsGroup failed")
+
+	    return json.loads(retData)
+	# Create global
+	def createGlobal(self, obj):
+	    postUrl = self.baseUrl + '/api/globals/' + obj.name  + '/'
+
+	    jdata = json.dumps({ 
+			"name": obj.name, 
+			"networkInfraType": obj.networkInfraType, 
+			"vlans": obj.vlans, 
+			"vxlans": obj.vxlans, 
+	    })
+
+	    # Post the data
+	    response = httpPost(postUrl, jdata)
+
+	    if response == "Error":
+	        errorExit("Global create failure")
+
+	# Delete global
+	def deleteGlobal(self, name):
+	    # Delete Global
+	    deleteUrl = self.baseUrl + '/api/globals/' + name  + '/'
+	    response = httpDelete(deleteUrl)
+
+	    if response == "Error":
+	        errorExit("Global create failure")
+
+	# List all global objects
+	def listGlobal(self):
+	    # Get a list of global objects
+	    retDate = urllib2.urlopen(self.baseUrl + '/api/globals/')
+	    if retData == "Error":
+	        errorExit("list Global failed")
+
+	    return json.loads(retData)
 	# Create network
 	def createNetwork(self, obj):
-	    postUrl = self.baseUrl + '/api/Networks/' + obj.tenantName + ":" + obj.networkName  + '/'
+	    postUrl = self.baseUrl + '/api/networks/' + obj.tenantName + ":" + obj.networkName  + '/'
 
 	    jdata = json.dumps({ 
 			"encap": obj.encap, 
 			"gateway": obj.gateway, 
+			"ipv6Gateway": obj.ipv6Gateway, 
+			"ipv6Subnet": obj.ipv6Subnet, 
 			"networkName": obj.networkName, 
+			"nwType": obj.nwType, 
 			"pktTag": obj.pktTag, 
 			"subnet": obj.subnet, 
 			"tenantName": obj.tenantName, 
@@ -248,7 +284,7 @@ class objmodelClient:
 	    return json.loads(retData)
 	# Create policy
 	def createPolicy(self, obj):
-	    postUrl = self.baseUrl + '/api/Policys/' + obj.tenantName + ":" + obj.policyName  + '/'
+	    postUrl = self.baseUrl + '/api/policys/' + obj.tenantName + ":" + obj.policyName  + '/'
 
 	    jdata = json.dumps({ 
 			"policyName": obj.policyName, 
@@ -280,7 +316,7 @@ class objmodelClient:
 	    return json.loads(retData)
 	# Create rule
 	def createRule(self, obj):
-	    postUrl = self.baseUrl + '/api/Rules/' + obj.tenantName + ":" + obj.policyName + ":" + obj.ruleId  + '/'
+	    postUrl = self.baseUrl + '/api/rules/' + obj.tenantName + ":" + obj.policyName + ":" + obj.ruleId  + '/'
 
 	    jdata = json.dumps({ 
 			"action": obj.action, 
@@ -322,86 +358,45 @@ class objmodelClient:
 	        errorExit("list Rule failed")
 
 	    return json.loads(retData)
-	# Create service
-	def createService(self, obj):
-	    postUrl = self.baseUrl + '/api/Services/' + obj.tenantName + ":" + obj.appName + ":" + obj.serviceName  + '/'
+	# Create serviceLB
+	def createServiceLB(self, obj):
+	    postUrl = self.baseUrl + '/api/serviceLBs/' + obj.tenantName + ":" + obj.serviceName  + '/'
 
 	    jdata = json.dumps({ 
-			"appName": obj.appName, 
-			"command": obj.command, 
-			"cpu": obj.cpu, 
-			"endpointGroups": obj.endpointGroups, 
-			"environment": obj.environment, 
-			"imageName": obj.imageName, 
-			"memory": obj.memory, 
-			"networks": obj.networks, 
-			"scale": obj.scale, 
+			"ipAddress": obj.ipAddress, 
+			"networkName": obj.networkName, 
+			"ports": obj.ports, 
+			"selectors": obj.selectors, 
 			"serviceName": obj.serviceName, 
 			"tenantName": obj.tenantName, 
-			"volumeProfile": obj.volumeProfile, 
 	    })
 
 	    # Post the data
 	    response = httpPost(postUrl, jdata)
 
 	    if response == "Error":
-	        errorExit("Service create failure")
+	        errorExit("ServiceLB create failure")
 
-	# Delete service
-	def deleteService(self, tenantName, appName, serviceName):
-	    # Delete Service
-	    deleteUrl = self.baseUrl + '/api/services/' + tenantName + ":" + appName + ":" + serviceName  + '/'
+	# Delete serviceLB
+	def deleteServiceLB(self, tenantName, serviceName):
+	    # Delete ServiceLB
+	    deleteUrl = self.baseUrl + '/api/serviceLBs/' + tenantName + ":" + serviceName  + '/'
 	    response = httpDelete(deleteUrl)
 
 	    if response == "Error":
-	        errorExit("Service create failure")
+	        errorExit("ServiceLB create failure")
 
-	# List all service objects
-	def listService(self):
-	    # Get a list of service objects
-	    retDate = urllib2.urlopen(self.baseUrl + '/api/services/')
+	# List all serviceLB objects
+	def listServiceLB(self):
+	    # Get a list of serviceLB objects
+	    retDate = urllib2.urlopen(self.baseUrl + '/api/serviceLBs/')
 	    if retData == "Error":
-	        errorExit("list Service failed")
-
-	    return json.loads(retData)
-	# Create serviceInstance
-	def createServiceInstance(self, obj):
-	    postUrl = self.baseUrl + '/api/ServiceInstances/' + obj.tenantName + ":" + obj.appName + ":" + obj.serviceName + ":" + obj.instanceId  + '/'
-
-	    jdata = json.dumps({ 
-			"appName": obj.appName, 
-			"instanceId": obj.instanceId, 
-			"serviceName": obj.serviceName, 
-			"tenantName": obj.tenantName, 
-			"volumes": obj.volumes, 
-	    })
-
-	    # Post the data
-	    response = httpPost(postUrl, jdata)
-
-	    if response == "Error":
-	        errorExit("ServiceInstance create failure")
-
-	# Delete serviceInstance
-	def deleteServiceInstance(self, tenantName, appName, serviceName, instanceId):
-	    # Delete ServiceInstance
-	    deleteUrl = self.baseUrl + '/api/serviceInstances/' + tenantName + ":" + appName + ":" + serviceName + ":" + instanceId  + '/'
-	    response = httpDelete(deleteUrl)
-
-	    if response == "Error":
-	        errorExit("ServiceInstance create failure")
-
-	# List all serviceInstance objects
-	def listServiceInstance(self):
-	    # Get a list of serviceInstance objects
-	    retDate = urllib2.urlopen(self.baseUrl + '/api/serviceInstances/')
-	    if retData == "Error":
-	        errorExit("list ServiceInstance failed")
+	        errorExit("list ServiceLB failed")
 
 	    return json.loads(retData)
 	# Create tenant
 	def createTenant(self, obj):
-	    postUrl = self.baseUrl + '/api/Tenants/' + obj.tenantName  + '/'
+	    postUrl = self.baseUrl + '/api/tenants/' + obj.tenantName  + '/'
 
 	    jdata = json.dumps({ 
 			"defaultNetwork": obj.defaultNetwork, 
@@ -433,7 +428,7 @@ class objmodelClient:
 	    return json.loads(retData)
 	# Create volume
 	def createVolume(self, obj):
-	    postUrl = self.baseUrl + '/api/Volumes/' + obj.tenantName + ":" + obj.volumeName  + '/'
+	    postUrl = self.baseUrl + '/api/volumes/' + obj.tenantName + ":" + obj.volumeName  + '/'
 
 	    jdata = json.dumps({ 
 			"datastoreType": obj.datastoreType, 
@@ -469,7 +464,7 @@ class objmodelClient:
 	    return json.loads(retData)
 	# Create volumeProfile
 	def createVolumeProfile(self, obj):
-	    postUrl = self.baseUrl + '/api/VolumeProfiles/' + obj.tenantName + ":" + obj.volumeProfileName  + '/'
+	    postUrl = self.baseUrl + '/api/volumeProfiles/' + obj.tenantName + ":" + obj.volumeProfileName  + '/'
 
 	    jdata = json.dumps({ 
 			"datastoreType": obj.datastoreType, 
