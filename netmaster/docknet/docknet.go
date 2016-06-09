@@ -97,8 +97,6 @@ func GetDocknetName(tenantName, networkName, serviceName string) string {
 func CreateDockNet(tenantName, networkName, serviceName string, nwCfg *mastercfg.CfgNetworkState) error {
 	var nwID string
 
-	subnetCIDR := fmt.Sprintf("%s/%d", nwCfg.SubnetIP, nwCfg.SubnetLen)
-
 	// Trim default tenant name
 	docknetName := GetDocknetName(tenantName, networkName, serviceName)
 
@@ -128,6 +126,12 @@ func CreateDockNet(tenantName, networkName, serviceName string, nwCfg *mastercfg
 			netPluginOptions["pkt-tag"] = strconv.Itoa(nwCfg.PktTag)
 		}
 
+		subnetCIDR := fmt.Sprintf("%s/%d", nwCfg.SubnetIP, nwCfg.SubnetLen)
+
+		ipamOptions := make(map[string]string)
+		ipamOptions["tenant"] = nwCfg.Tenant
+		ipamOptions["network"] = nwCfg.NetworkName
+
 		// Build network parameters
 		nwCreate := dockerclient.NetworkCreate{
 			Name:           docknetName,
@@ -141,6 +145,7 @@ func CreateDockNet(tenantName, networkName, serviceName string, nwCfg *mastercfg
 						Gateway: nwCfg.Gateway,
 					},
 				},
+				Options: ipamOptions,
 			},
 			Options: netPluginOptions,
 		}

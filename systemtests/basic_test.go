@@ -3,6 +3,7 @@ package systemtests
 import (
 	"github.com/contiv/contivmodel/client"
 	. "gopkg.in/check.v1"
+	"time"
 )
 
 var privateNetwork = &client.Network{
@@ -23,6 +24,11 @@ func (s *systemtestSuite) TestBasicStartRemoveContainerVLAN(c *C) {
 }
 
 func (s *systemtestSuite) testBasicStartRemoveContainer(c *C, encap string) {
+
+	if s.fwdMode == "routing" && encap == "vlan" {
+		s.SetupBgp(c, false)
+		s.CheckBgpConnection(c)
+	}
 	c.Assert(s.cli.NetworkPost(&client.Network{
 		PktTag:      1001,
 		NetworkName: "private",
@@ -34,6 +40,9 @@ func (s *systemtestSuite) testBasicStartRemoveContainer(c *C, encap string) {
 
 	for i := 0; i < s.iterations; i++ {
 		containers, err := s.runContainers(s.containers, false, "private", nil)
+		if s.fwdMode == "routing" && encap == "vlan" {
+			time.Sleep(5 * time.Second)
+		}
 		c.Assert(err, IsNil)
 		c.Assert(s.pingTest(containers), IsNil)
 		c.Assert(s.removeContainers(containers), IsNil)
@@ -51,6 +60,10 @@ func (s *systemtestSuite) TestBasicStartStopContainerVLAN(c *C) {
 }
 
 func (s *systemtestSuite) testBasicStartStopContainer(c *C, encap string) {
+	if s.fwdMode == "routing" && encap == "vlan" {
+		s.SetupBgp(c, false)
+		s.CheckBgpConnection(c)
+	}
 	c.Assert(s.cli.NetworkPost(&client.Network{
 		PktTag:      1001,
 		NetworkName: "private",
@@ -79,6 +92,10 @@ func (s *systemtestSuite) testBasicStartStopContainer(c *C, encap string) {
 
 		for range containers {
 			c.Assert(<-errChan, IsNil)
+		}
+
+		if s.fwdMode == "routing" && encap == "vlan" {
+			time.Sleep(5 * time.Second)
 		}
 
 		c.Assert(s.pingTest(containers), IsNil)
