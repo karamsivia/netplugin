@@ -12,7 +12,7 @@ type FakeNetEpDriver struct {
 }
 
 // Init is not implemented.
-func (d *FakeNetEpDriver) Init(config *core.Config, info *core.InstanceInfo) error {
+func (d *FakeNetEpDriver) Init(info *core.InstanceInfo) error {
 	return nil
 }
 
@@ -26,7 +26,7 @@ func (d *FakeNetEpDriver) CreateNetwork(id string) error {
 }
 
 // DeleteNetwork is not implemented.
-func (d *FakeNetEpDriver) DeleteNetwork(id, encap string, pktTag, extPktTag int, gateway string) error {
+func (d *FakeNetEpDriver) DeleteNetwork(id, nwType, encap string, pktTag, extPktTag int, gateway string, tenant string) error {
 	return core.Errorf("Not implemented")
 }
 

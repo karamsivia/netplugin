@@ -39,6 +39,7 @@ type ConfigNetwork struct {
 	Name string
 
 	// overrides for various functions when auto allocation is not desired
+	NwType     string
 	PktTagType string
 	PktTag     int
 	SubnetCIDR string
@@ -65,6 +66,16 @@ type ConfigBgp struct {
 	As         string
 	NeighborAs string
 	Neighbor   string
+}
+
+//ConfigServiceLB keeps servicelb specific configs
+type ConfigServiceLB struct {
+	ServiceName string
+	Tenant      string
+	Selectors   map[string]string
+	Network     string
+	Ports       []string
+	IPAddress   string
 }
 
 // Config is the top level configuration

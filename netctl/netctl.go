@@ -276,6 +276,7 @@ func createNetwork(ctx *cli.Context) {
 	network := ctx.Args()[0]
 	encap := ctx.String("encap")
 	pktTag := ctx.Int("pkt-tag")
+	nwType := ctx.String("nw-type")
 
 	errCheck(ctx, getClient(ctx).NetworkPost(&contivClient.Network{
 		TenantName:  tenant,
@@ -284,6 +285,7 @@ func createNetwork(ctx *cli.Context) {
 		Subnet:      subnet,
 		Gateway:     gateway,
 		PktTag:      pktTag,
+		NwType:      nwType,
 	}))
 }
 
@@ -330,14 +332,15 @@ func listNetworks(ctx *cli.Context) {
 	} else {
 		writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 		defer writer.Flush()
-		writer.Write([]byte("Tenant\tNetwork\tEncap type\tPacket tag\tSubnet\tGateway\n"))
-		writer.Write([]byte("------\t-------\t----------\t----------\t-------\t------\n"))
+		writer.Write([]byte("Tenant\tNetwork\tNw Type\tEncap type\tPacket tag\tSubnet\tGateway\n"))
+		writer.Write([]byte("------\t-------\t-------\t----------\t----------\t-------\t------\n"))
 
 		for _, net := range filtered {
 			writer.Write(
-				[]byte(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\n",
+				[]byte(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
 					net.TenantName,
 					net.NetworkName,
+					net.NwType,
 					net.Encap,
 					net.PktTag,
 					net.Subnet,
@@ -410,22 +413,27 @@ func createEndpointGroup(ctx *cli.Context) {
 		policies = []string{}
 	}
 
+	extContractsGrps := strings.Split(ctx.String("external-contracts"), ",")
+	if ctx.String("external-contracts") == "" {
+		extContractsGrps = []string{}
+	}
+
 	errCheck(ctx, getClient(ctx).EndpointGroupPost(&contivClient.EndpointGroup{
-		TenantName:  tenant,
-		NetworkName: network,
-		GroupName:   group,
-		Policies:    policies,
+		TenantName:       tenant,
+		NetworkName:      network,
+		GroupName:        group,
+		Policies:         policies,
+		ExtContractsGrps: extContractsGrps,
 	}))
 }
 
 func deleteEndpointGroup(ctx *cli.Context) {
-	argCheck(2, ctx)
+	argCheck(1, ctx)
 
 	tenant := ctx.String("tenant")
-	network := ctx.Args()[0]
-	group := ctx.Args()[1]
+	group := ctx.Args()[0]
 
-	errCheck(ctx, getClient(ctx).EndpointGroupDelete(tenant, network, group))
+	errCheck(ctx, getClient(ctx).EndpointGroupDelete(tenant, group))
 }
 
 func listEndpointGroups(ctx *cli.Context) {
@@ -554,11 +562,11 @@ func listBgp(ctx *cli.Context) {
 		for _, group := range filtered {
 			writer.Write(
 				[]byte(fmt.Sprintf("%v\t%v\t%v\t%v\t%v\n",
-					group.As,
 					group.Hostname,
+					group.Routerip,
+					group.As,
 					group.Neighbor,
 					group.NeighborAs,
-					group.Routerip,
 				)))
 		}
 	}
@@ -621,11 +629,10 @@ func showVersion(ctx *cli.Context) {
 }
 
 func createAppProfile(ctx *cli.Context) {
-	argCheck(2, ctx)
+	argCheck(1, ctx)
 
 	tenant := ctx.String("tenant")
-	network := ctx.Args()[0]
-	prof := ctx.Args()[1]
+	prof := ctx.Args()[0]
 
 	groups := strings.Split(ctx.String("group"), ",")
 	if ctx.String("group") == "" {
@@ -634,18 +641,16 @@ func createAppProfile(ctx *cli.Context) {
 
 	errCheck(ctx, getClient(ctx).AppProfilePost(&contivClient.AppProfile{
 		TenantName:     tenant,
-		NetworkName:    network,
 		AppProfileName: prof,
 		EndpointGroups: groups,
 	}))
 }
 
 func updateAppProfile(ctx *cli.Context) {
-	argCheck(2, ctx)
+	argCheck(1, ctx)
 
 	tenant := ctx.String("tenant")
-	network := ctx.Args()[0]
-	prof := ctx.Args()[1]
+	prof := ctx.Args()[0]
 
 	groups := strings.Split(ctx.String("group"), ",")
 	if ctx.String("group") == "" {
@@ -654,20 +659,18 @@ func updateAppProfile(ctx *cli.Context) {
 
 	errCheck(ctx, getClient(ctx).AppProfilePost(&contivClient.AppProfile{
 		TenantName:     tenant,
-		NetworkName:    network,
 		AppProfileName: prof,
 		EndpointGroups: groups,
 	}))
 }
 
 func deleteAppProfile(ctx *cli.Context) {
-	argCheck(2, ctx)
+	argCheck(1, ctx)
 
 	tenant := ctx.String("tenant")
-	network := ctx.Args()[0]
-	prof := ctx.Args()[1]
+	prof := ctx.Args()[0]
 
-	errCheck(ctx, getClient(ctx).AppProfileDelete(tenant, network, prof))
+	errCheck(ctx, getClient(ctx).AppProfileDelete(tenant, prof))
 }
 
 func listAppProfiles(ctx *cli.Context) {
@@ -698,8 +701,8 @@ func listAppProfiles(ctx *cli.Context) {
 
 		writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 		defer writer.Flush()
-		writer.Write([]byte("Tenant\tAppProfile\tNetwork\tGroups\n"))
-		writer.Write([]byte("------\t-----\t-------\t--------\n"))
+		writer.Write([]byte("Tenant\tAppProfile\tGroups\n"))
+		writer.Write([]byte("------\t-----\t---------\n"))
 		for _, p := range filtered {
 			groups := ""
 			if p.EndpointGroups != nil {
@@ -710,10 +713,9 @@ func listAppProfiles(ctx *cli.Context) {
 				groups = strings.Join(groupList, ",")
 			}
 			writer.Write(
-				[]byte(fmt.Sprintf("%v\t%v\t%v\t%v\n",
+				[]byte(fmt.Sprintf("%v\t%v\t%v\n",
 					p.TenantName,
 					p.AppProfileName,
-					p.NetworkName,
 					groups,
 				)))
 		}
@@ -721,13 +723,12 @@ func listAppProfiles(ctx *cli.Context) {
 }
 
 func listAppProfEpgs(ctx *cli.Context) {
-	argCheck(2, ctx)
+	argCheck(1, ctx)
 
 	tenant := ctx.String("tenant")
-	network := ctx.Args()[0]
-	prof := ctx.Args()[1]
+	prof := ctx.Args()[0]
 
-	p, err := getClient(ctx).AppProfileGet(tenant, network, prof)
+	p, err := getClient(ctx).AppProfileGet(tenant, prof)
 	errCheck(ctx, err)
 	if ctx.Bool("json") {
 		dumpJSONList(ctx, p)
@@ -742,4 +743,151 @@ func listAppProfEpgs(ctx *cli.Context) {
 		}
 		os.Stdout.WriteString(groups)
 	}
+}
+
+//createServiceLB is a netctl interface routine to delete
+//service object
+func createServiceLB(ctx *cli.Context) {
+	argCheck(1, ctx)
+
+	serviceName := ctx.Args()[0]
+	serviceSubnet := ctx.String("network")
+	tenantName := ctx.String("tenant")
+
+	selectors := ctx.StringSlice("selector")
+	ports := ctx.StringSlice("port")
+	ipAddress := ctx.String("preferred-ip")
+	errCheck(ctx, getClient(ctx).ServiceLBPost(&contivClient.ServiceLB{
+		ServiceName: serviceName,
+		TenantName:  tenantName,
+		NetworkName: serviceSubnet,
+		Selectors:   selectors,
+		Ports:       ports,
+		IpAddress:   ipAddress,
+	}))
+}
+
+//deleteServiceLB is a netctl interface routine to delete
+//service object
+func deleteServiceLB(ctx *cli.Context) {
+	argCheck(1, ctx)
+
+	serviceName := ctx.Args()[0]
+	tenantName := ctx.String("tenant")
+
+	fmt.Printf("Deleting Service  %s,%s", serviceName, tenantName)
+
+	errCheck(ctx, getClient(ctx).ServiceLBDelete(serviceName, tenantName))
+}
+
+//listServiceLB is a netctl interface routine to delete
+//service object
+func listServiceLB(ctx *cli.Context) {
+	argCheck(1, ctx)
+
+	serviceName := ctx.Args()[0]
+	tenantName := ctx.String("tenantName")
+
+	svcList, err := getClient(ctx).ServiceLBList()
+	errCheck(ctx, err)
+
+	filtered := []*contivClient.ServiceLB{}
+
+	for _, svc := range *svcList {
+		if svc.ServiceName == serviceName || ctx.Bool("all") && svc.TenantName == tenantName {
+			filtered = append(filtered, svc)
+		}
+	}
+
+	if ctx.Bool("json") {
+		dumpJSONList(ctx, filtered)
+	} else {
+
+		writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+		defer writer.Flush()
+		writer.Write([]byte("ServiceName\tTenant\tNetwork\tSelectors\n"))
+		writer.Write([]byte("---------\t--------\t-------\t-------\n"))
+		for _, group := range filtered {
+			writer.Write(
+				[]byte(fmt.Sprintf("%v\t%v\t%v\t%v\t\n",
+					group.ServiceName,
+					group.TenantName,
+					group.NetworkName,
+					group.Selectors,
+				)))
+		}
+	}
+}
+
+func listExternalContracts(ctx *cli.Context) {
+	argCheck(0, ctx)
+
+	extContractsGroups, err := getClient(ctx).ExtContractsGroupList()
+	errCheck(ctx, err)
+
+	tenant := ctx.String("tenant")
+
+	if ctx.Bool("json") {
+		dumpJSONList(ctx, extContractsGroups)
+	} else if ctx.Bool("quiet") {
+		contractsGroupNames := ""
+		for _, extContractsGroup := range *extContractsGroups {
+			contractsGroupNames += extContractsGroup.ContractsGroupName + "\n"
+		}
+		os.Stdout.WriteString(contractsGroupNames)
+	} else {
+		writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+		defer writer.Flush()
+		for _, extContractsGroup := range *extContractsGroups {
+			if extContractsGroup.TenantName != tenant {
+				continue
+			}
+			writer.Write([]byte(fmt.Sprintf(" Name: %s\t\tType: %s\n", extContractsGroup.ContractsGroupName, extContractsGroup.ContractsType)))
+			writer.Write([]byte(fmt.Sprintf(" Contracts:\n")))
+			for _, contract := range extContractsGroup.Contracts {
+				writer.Write([]byte(fmt.Sprintf("\t\t%s\n", contract)))
+			}
+		}
+	}
+}
+
+func deleteExternalContracts(ctx *cli.Context) {
+	argCheck(1, ctx)
+	contractsGroupName := ctx.Args()[0]
+	tenant := ctx.String("tenant")
+
+	logrus.Infof("Deleting external contracts group %s in tenant %s", contractsGroupName, tenant)
+	errCheck(ctx, getClient(ctx).ExtContractsGroupDelete(tenant, contractsGroupName))
+
+}
+
+func createExternalContracts(ctx *cli.Context) {
+	argCheck(1, ctx)
+
+	var contractsType string
+	if ctx.Bool("provided") && ctx.Bool("consumed") {
+		errExit(ctx, exitHelp, "Cannot use both provided and consumed", false)
+	} else if ctx.Bool("provided") {
+		contractsType = "provided"
+	} else if ctx.Bool("consumed") {
+		contractsType = "consumed"
+	} else {
+		errExit(ctx, exitHelp, "Either provided or consumed must be specified", false)
+	}
+
+	tenant := ctx.String("tenant")
+
+	contracts := strings.Split(ctx.String("contracts"), ",")
+	if ctx.String("contracts") == "" {
+		errExit(ctx, exitHelp, "Contracts not provided", false)
+	}
+
+	contractsGroupName := ctx.Args()[0]
+
+	errCheck(ctx, getClient(ctx).ExtContractsGroupPost(&contivClient.ExtContractsGroup{
+		TenantName:         tenant,
+		ContractsGroupName: contractsGroupName,
+		ContractsType:      contractsType,
+		Contracts:          contracts,
+	}))
 }

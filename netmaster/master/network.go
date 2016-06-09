@@ -95,11 +95,16 @@ func CreateNetwork(network intent.ConfigNetwork, stateDriver core.StateDriver, t
 	}
 
 	subnetIP, subnetLen, _ := netutils.ParseCIDR(network.SubnetCIDR)
+	err = netutils.ValidateNetworkRangeParams(subnetIP, subnetLen)
+	if err != nil {
+		return err
+	}
 
 	// construct and update network state
 	nwCfg = &mastercfg.CfgNetworkState{
 		Tenant:      tenantName,
 		NetworkName: network.Name,
+		NwType:      network.NwType,
 		PktTagType:  network.PktTagType,
 		SubnetIP:    subnetIP,
 		SubnetLen:   subnetLen,
@@ -125,10 +130,14 @@ func CreateNetwork(network intent.ConfigNetwork, stateDriver core.StateDriver, t
 	nwCfg.ExtPktTag = int(extPktTag)
 	nwCfg.PktTag = int(pktTag)
 
+	netutils.InitSubnetBitset(&nwCfg.IPAllocMap, nwCfg.SubnetLen)
+	subnetAddr := netutils.GetSubnetAddr(nwCfg.SubnetIP, nwCfg.SubnetLen)
+
 	if network.Gateway != "" {
 		nwCfg.Gateway = network.Gateway
+
 		// Reserve gateway IP address if gateway is specified
-		ipAddrValue, err := netutils.GetIPNumber(nwCfg.SubnetIP, nwCfg.SubnetLen, 32, nwCfg.Gateway)
+		ipAddrValue, err := netutils.GetIPNumber(subnetAddr, nwCfg.SubnetLen, 32, nwCfg.Gateway)
 		if err != nil {
 			log.Errorf("Error parsing gateway address %s. Err: %v", nwCfg.Gateway, err)
 			return err
@@ -136,10 +145,19 @@ func CreateNetwork(network intent.ConfigNetwork, stateDriver core.StateDriver, t
 		nwCfg.IPAllocMap.Set(ipAddrValue)
 	}
 
-	netutils.InitSubnetBitset(&nwCfg.IPAllocMap, nwCfg.SubnetLen)
+	if strings.Contains(subnetIP, "-") {
+		netutils.SetBitsOutsideRange(&nwCfg.IPAllocMap, subnetIP, subnetLen)
+	}
+	nwCfg.SubnetIP = subnetAddr
+
 	err = nwCfg.Write()
 	if err != nil {
 		return err
+	}
+
+	// Skip docker and service container configs for infra nw
+	if network.NwType == "infra" {
+		return nil
 	}
 
 	if GetClusterMode() == "docker" {
@@ -373,30 +391,33 @@ func DeleteNetworkID(stateDriver core.StateDriver, netID string) error {
 		return err
 	}
 
-	// Check if there are any active endpoints
-	if hasActiveEndpoints(nwCfg) {
-		return core.Errorf("Error: Network has active endpoints")
-	}
-
-	if IsDNSEnabled() {
-		// detach Dns container
-		err = detachServiceContainer(nwCfg.Tenant, nwCfg.NetworkName)
-		if err != nil {
-			log.Errorf("Error detaching service container. Err: %v", err)
+	if nwCfg.NwType != "infra" {
+		// For Infra nw, endpoint delete initiated by netplugin
+		// Check if there are any active endpoints
+		if hasActiveEndpoints(nwCfg) {
+			return core.Errorf("Error: Network has active endpoints")
 		}
-	}
 
-	if GetClusterMode() == "docker" {
-		// Delete the docker network
-		err = docknet.DeleteDockNet(nwCfg.Tenant, nwCfg.NetworkName, "")
-		if err != nil {
-			log.Errorf("Error deleting network %s. Err: %v", netID, err)
-			// DeleteDockNet will fail when network has active endpoints.
-			// No damage is done yet. It is safe to fail.
-			// We do not have to call attachServiceContainer here,
-			// as detachServiceContainer detaches only when there are no
-			// endpoints remaining.
-			return err
+		if IsDNSEnabled() {
+			// detach Dns container
+			err = detachServiceContainer(nwCfg.Tenant, nwCfg.NetworkName)
+			if err != nil {
+				log.Errorf("Error detaching service container. Err: %v", err)
+			}
+		}
+
+		if GetClusterMode() == "docker" {
+			// Delete the docker network
+			err = docknet.DeleteDockNet(nwCfg.Tenant, nwCfg.NetworkName, "")
+			if err != nil {
+				log.Errorf("Error deleting network %s. Err: %v", netID, err)
+				// DeleteDockNet will fail when network has active endpoints.
+				// No damage is done yet. It is safe to fail.
+				// We do not have to call attachServiceContainer here,
+				// as detachServiceContainer detaches only when there are no
+				// endpoints remaining.
+				return err
+			}
 		}
 	}
 
@@ -484,7 +505,7 @@ func networkAllocAddress(nwCfg *mastercfg.CfgNetworkState, reqAddr string) (stri
 		// we need to make sure that the EpCount is incremented only when we are allocating
 		// a new IP. In case of Docker, Mesos CreateEndPoint will already request a IP that
 		// allocateAddress had allocated in the earlier call.
-		nwCfg.EpCount++
+		nwCfg.EpAddrCount++
 
 	} else if reqAddr != "" && nwCfg.SubnetIP != "" {
 		ipAddrValue, err = netutils.GetIPNumber(nwCfg.SubnetIP, nwCfg.SubnetLen, 32, reqAddr)
@@ -522,7 +543,7 @@ func networkReleaseAddress(nwCfg *mastercfg.CfgNetworkState, ipAddress string) e
 	// Make sure we decrement the EpCount only if the IPAddress
 	// was not already freed earlier
 	if nwCfg.IPAllocMap.Test(ipAddrValue) {
-		nwCfg.EpCount--
+		nwCfg.EpAddrCount--
 	}
 	nwCfg.IPAllocMap.Clear(ipAddrValue)
 

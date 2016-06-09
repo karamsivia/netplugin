@@ -105,14 +105,19 @@ func NewOvsSwitch(bridgeName, netType, localIP string, fwdMode string,
 	target := fmt.Sprintf("tcp:%s:%d", ctrlerIP, ctrlrPort)
 	if !sw.ovsdbDriver.IsControllerPresent(target) {
 		err = sw.ovsdbDriver.AddController(ctrlerIP, ctrlrPort)
-
-		log.Infof("Waiting for OVS switch(%s) to connect..", netType)
-
-		// Wait for a while for OVS switch to connect to ofnet agent
-		sw.ofnetAgent.WaitForSwitchConnection()
-
-		log.Infof("Switch (%s) connected.", netType)
+		if err != nil {
+			log.Errorf("Error adding controller to switch: %s. Err: %v", bridgeName, err)
+			return nil, err
+		}
 	}
+
+	log.Infof("Waiting for OVS switch(%s) to connect..", netType)
+
+	// Wait for a while for OVS switch to connect to ofnet agent
+	sw.ofnetAgent.WaitForSwitchConnection()
+
+	log.Infof("Switch (%s) connected.", netType)
+
 	return sw, nil
 }
 
@@ -130,7 +135,7 @@ func (sw *OvsSwitch) Delete() {
 }
 
 // CreateNetwork creates a new network/vlan
-func (sw *OvsSwitch) CreateNetwork(pktTag uint16, extPktTag uint32, defaultGw string ,Vrf string) error {
+func (sw *OvsSwitch) CreateNetwork(pktTag uint16, extPktTag uint32, defaultGw string, Vrf string) error {
 	// Add the vlan/vni to ofnet
 	if sw.ofnetAgent != nil {
 		err := sw.ofnetAgent.AddNetwork(pktTag, extPktTag, defaultGw, Vrf)
@@ -143,7 +148,7 @@ func (sw *OvsSwitch) CreateNetwork(pktTag uint16, extPktTag uint32, defaultGw st
 }
 
 // DeleteNetwork deletes a network/vlan
-func (sw *OvsSwitch) DeleteNetwork(pktTag uint16, extPktTag uint32, gateway string , Vrf string) error {
+func (sw *OvsSwitch) DeleteNetwork(pktTag uint16, extPktTag uint32, gateway string, Vrf string) error {
 	// Delete vlan/vni mapping
 	if sw.ofnetAgent != nil {
 		err := sw.ofnetAgent.RemoveNetwork(pktTag, extPktTag, gateway, Vrf)
@@ -217,11 +222,12 @@ func setLinkMtu(name string, mtu int) error {
 	return netlink.LinkSetMTU(iface, mtu)
 }
 
-// getOvsPostName returns OVS port name depending on if we use Veth pairs
-func getOvsPostName(intfName string) string {
+// getOvsPortName returns OVS port name depending on if we use Veth pairs
+// For infra nw, dont use Veth pair
+func getOvsPortName(intfName string, skipVethPair bool) string {
 	var ovsPortName string
 
-	if useVethPair {
+	if useVethPair && !skipVethPair {
 		ovsPortName = strings.Replace(intfName, "port", "vport", 1)
 	} else {
 		ovsPortName = intfName
@@ -231,14 +237,14 @@ func getOvsPostName(intfName string) string {
 }
 
 // CreatePort creates a port in ovs switch
-func (sw *OvsSwitch) CreatePort(intfName string, cfgEp *mastercfg.CfgEndpointState, pktTag, nwPktTag int) error {
+func (sw *OvsSwitch) CreatePort(intfName string, cfgEp *mastercfg.CfgEndpointState, pktTag, nwPktTag int, skipVethPair bool) error {
 	var ovsIntfType string
 
 	// Get OVS port name
-	ovsPortName := getOvsPostName(intfName)
+	ovsPortName := getOvsPortName(intfName, skipVethPair)
 
 	// Create Veth pairs if required
-	if useVethPair {
+	if useVethPair && !skipVethPair {
 		ovsIntfType = ""
 
 		// Create a Veth pair
@@ -257,19 +263,21 @@ func (sw *OvsSwitch) CreatePort(intfName string, cfgEp *mastercfg.CfgEndpointSta
 	} else {
 		ovsPortName = intfName
 		ovsIntfType = "internal"
-
 	}
 
-	// Set the link mtu to 1450 to allow for 50 bytes vxlan encap
-	// (inner eth header(14) + outer IP(20) outer UDP(8) + vxlan header(8))
-	err := setLinkMtu(intfName, vxlanEndpointMtu)
-	if err != nil {
-		log.Errorf("Error setting link %s mtu. Err: %v", intfName, err)
-		return err
+	// If the port already exists in OVS, remove it first
+	if sw.ovsdbDriver.IsPortNamePresent(ovsPortName) {
+		log.Debugf("Removing existing interface entry %s from OVS", ovsPortName)
+
+		// Delete it from ovsdb
+		err := sw.ovsdbDriver.DeletePort(ovsPortName)
+		if err != nil {
+			log.Errorf("Error deleting port %s from OVS. Err: %v", ovsPortName, err)
+		}
 	}
 
 	// Ask OVSDB driver to add the port
-	err = sw.ovsdbDriver.CreatePort(ovsPortName, ovsIntfType, cfgEp.ID, pktTag)
+	err := sw.ovsdbDriver.CreatePort(ovsPortName, ovsIntfType, cfgEp.ID, pktTag)
 	if err != nil {
 		return err
 	}
@@ -281,6 +289,14 @@ func (sw *OvsSwitch) CreatePort(intfName string, cfgEp *mastercfg.CfgEndpointSta
 
 	// Wait a little for OVS to create the interface
 	time.Sleep(300 * time.Millisecond)
+
+	// Set the link mtu to 1450 to allow for 50 bytes vxlan encap
+	// (inner eth header(14) + outer IP(20) outer UDP(8) + vxlan header(8))
+	err = setLinkMtu(intfName, vxlanEndpointMtu)
+	if err != nil {
+		log.Errorf("Error setting link %s mtu. Err: %v", intfName, err)
+		return err
+	}
 
 	// Set the interface mac address
 	err = netutils.SetInterfaceMac(intfName, cfgEp.MacAddress)
@@ -301,17 +317,19 @@ func (sw *OvsSwitch) CreatePort(intfName string, cfgEp *mastercfg.CfgEndpointSta
 
 	// Build the endpoint info
 	endpoint := ofnet.EndpointInfo{
-		PortNo:        ofpPort,
-		MacAddr:       macAddr,
-		Vlan:          uint16(nwPktTag),
-		IpAddr:        net.ParseIP(cfgEp.IPAddress),
-		EndpointGroup: cfgEp.EndpointGroupID,
+		PortNo:            ofpPort,
+		MacAddr:           macAddr,
+		Vlan:              uint16(nwPktTag),
+		IpAddr:            net.ParseIP(cfgEp.IPAddress),
+		EndpointGroup:     cfgEp.EndpointGroupID,
+		EndpointGroupVlan: uint16(pktTag),
 	}
 
 	log.Infof("Adding local endpoint: {%+v}", endpoint)
 
 	// Add the local port to ofnet
 	err = sw.ofnetAgent.AddLocalEndpoint(endpoint)
+
 	if err != nil {
 		log.Errorf("Error adding local port %s to ofnet. Err: %v", ovsPortName, err)
 		return err
@@ -320,9 +338,10 @@ func (sw *OvsSwitch) CreatePort(intfName string, cfgEp *mastercfg.CfgEndpointSta
 }
 
 // UpdatePort updates an OVS port without creating it
-func (sw *OvsSwitch) UpdatePort(intfName string, cfgEp *mastercfg.CfgEndpointState, pktTag int) error {
+func (sw *OvsSwitch) UpdatePort(intfName string, cfgEp *mastercfg.CfgEndpointState, pktTag int, skipVethPair bool) error {
+
 	// Get OVS port name
-	ovsPortName := getOvsPostName(intfName)
+	ovsPortName := getOvsPortName(intfName, skipVethPair)
 
 	// Add the endpoint to ofnet
 	// Get the openflow port number for the interface
@@ -357,17 +376,14 @@ func (sw *OvsSwitch) UpdatePort(intfName string, cfgEp *mastercfg.CfgEndpointSta
 }
 
 // DeletePort removes a port from OVS
-func (sw *OvsSwitch) DeletePort(epOper *OvsOperEndpointState) error {
+func (sw *OvsSwitch) DeletePort(epOper *OvsOperEndpointState, skipVethPair bool) error {
 
 	if epOper.VtepIP != "" {
 		return nil
 	}
 
 	// Get the OVS port name
-	ovsPortName := getOvsPostName(epOper.PortName)
-	if !useVethPair {
-		ovsPortName = epOper.PortName
-	}
+	ovsPortName := getOvsPortName(epOper.PortName, skipVethPair)
 
 	// Get the openflow port number for the interface
 	ofpPort, err := sw.ovsdbDriver.GetOfpPortNo(ovsPortName)
@@ -393,7 +409,7 @@ func (sw *OvsSwitch) DeletePort(epOper *OvsOperEndpointState) error {
 	}
 
 	// Delete the Veth pairs if required
-	if useVethPair {
+	if useVethPair && !skipVethPair {
 		// Delete a Veth pair
 		verr := deleteVethPair(ovsPortName, epOper.PortName)
 		if verr != nil {

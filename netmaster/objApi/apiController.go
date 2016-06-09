@@ -17,14 +17,14 @@ package objApi
 
 import (
 	"errors"
-	"time"
-
 	"github.com/contiv/contivmodel"
 	"github.com/contiv/netplugin/core"
 	"github.com/contiv/netplugin/netmaster/intent"
 	"github.com/contiv/netplugin/netmaster/master"
 	"github.com/contiv/netplugin/utils"
 	"github.com/contiv/objdb/modeldb"
+	"strconv"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -38,9 +38,12 @@ type APIController struct {
 var apiCtrler *APIController
 
 // NewAPIController creates a new controller
-func NewAPIController(router *mux.Router) *APIController {
+func NewAPIController(router *mux.Router, storeURL string) *APIController {
 	ctrler := new(APIController)
 	ctrler.router = router
+
+	// init modeldb
+	modeldb.Init(storeURL)
 
 	// initialize the model objects
 	contivModel.Init()
@@ -52,15 +55,15 @@ func NewAPIController(router *mux.Router) *APIController {
 	contivModel.RegisterNetworkCallbacks(ctrler)
 	contivModel.RegisterPolicyCallbacks(ctrler)
 	contivModel.RegisterRuleCallbacks(ctrler)
-	contivModel.RegisterServiceCallbacks(ctrler)
-	contivModel.RegisterServiceInstanceCallbacks(ctrler)
 	contivModel.RegisterTenantCallbacks(ctrler)
 	contivModel.RegisterBgpCallbacks(ctrler)
+	contivModel.RegisterServiceLBCallbacks(ctrler)
+	contivModel.RegisterExtContractsGroupCallbacks(ctrler)
 	// Register routes
 	contivModel.AddRoutes(router)
 
 	// Init global state
-	gc := contivModel.FindGlobal("default")
+	gc := contivModel.FindGlobal("global")
 	if gc == nil {
 		log.Infof("Creating default global config")
 		err := contivModel.CreateGlobal(&contivModel.Global{
@@ -75,14 +78,6 @@ func NewAPIController(router *mux.Router) *APIController {
 		}
 	}
 
-	return ctrler
-}
-
-// CreateDefaultTenant creates the default tenant
-func CreateDefaultTenant() {
-	// Wait for netmaster to start listening to port 9999
-	time.Sleep(time.Second)
-
 	// Add default tenant if it doesnt exist
 	tenant := contivModel.FindTenant("default")
 	if tenant == nil {
@@ -95,6 +90,8 @@ func CreateDefaultTenant() {
 			log.Fatalf("Error creating default tenant. Err: %v", err)
 		}
 	}
+
+	return ctrler
 }
 
 // Utility function to check if string exists in a slice
@@ -198,26 +195,12 @@ func (ac *APIController) AppProfileCreate(prof *contivModel.AppProfile) error {
 		return core.Errorf("Tenant %s not found", prof.TenantName)
 	}
 
-	// Make sure network exists
-	if prof.NetworkName == "" {
-		return core.Errorf("Invalid network name")
-	}
-
-	nwKey := prof.TenantName + ":" + prof.NetworkName
-	network := contivModel.FindNetwork(nwKey)
-	if network == nil {
-		return core.Errorf("Network %s not found", nwKey)
-	}
-
 	// Setup links
 	modeldb.AddLink(&prof.Links.Tenant, tenant)
 	modeldb.AddLinkSet(&tenant.LinkSets.AppProfiles, prof)
 
-	modeldb.AddLink(&prof.Links.Network, network)
-	modeldb.AddLinkSet(&network.LinkSets.AppProfiles, prof)
-
 	for _, epg := range prof.EndpointGroups {
-		epgKey := nwKey + ":" + epg
+		epgKey := prof.TenantName + ":" + epg
 		epgObj := contivModel.FindEndpointGroup(epgKey)
 		if epgObj == nil {
 			return core.Errorf("EndpointGroup %s not found", epgKey)
@@ -231,14 +214,7 @@ func (ac *APIController) AppProfileCreate(prof *contivModel.AppProfile) error {
 		}
 	}
 
-	// Save the tenant and network too as we added the links
-	err := network.Write()
-	if err != nil {
-		log.Errorf("Error updating network state(%+v). Err: %v", network, err)
-		return err
-	}
-
-	err = tenant.Write()
+	err := tenant.Write()
 	if err != nil {
 		log.Errorf("Error updating tenant state(%+v). Err: %v", tenant, err)
 		return err
@@ -252,10 +228,9 @@ func (ac *APIController) AppProfileCreate(prof *contivModel.AppProfile) error {
 func (ac *APIController) AppProfileUpdate(oldProf, newProf *contivModel.AppProfile) error {
 	log.Infof("Received AppProfileUpdate: %+v, newProf: %+v", oldProf, newProf)
 
-	nwKey := newProf.TenantName + ":" + newProf.NetworkName
 	// handle any epg addition
 	for _, epg := range newProf.EndpointGroups {
-		epgKey := nwKey + ":" + epg
+		epgKey := newProf.TenantName + ":" + epg
 		log.Infof("Add %s to %s", epgKey, newProf.AppProfileName)
 		epgObj := contivModel.FindEndpointGroup(epgKey)
 		if epgObj == nil {
@@ -277,7 +252,7 @@ func (ac *APIController) AppProfileUpdate(oldProf, newProf *contivModel.AppProfi
 	// handle any epg removal
 	for _, epg := range oldProf.EndpointGroups {
 		if !stringInSlice(epg, newProf.EndpointGroups) {
-			epgKey := nwKey + ":" + epg
+			epgKey := newProf.TenantName + ":" + epg
 			log.Infof("Remove %s from %s", epgKey, newProf.AppProfileName)
 			epgObj := contivModel.FindEndpointGroup(epgKey)
 			if epgObj == nil {
@@ -317,9 +292,8 @@ func (ac *APIController) AppProfileDelete(prof *contivModel.AppProfile) error {
 	DeleteAppNw(prof)
 
 	// remove all links
-	nwKey := prof.TenantName + ":" + prof.NetworkName
 	for _, epg := range prof.EndpointGroups {
-		epgKey := nwKey + ":" + epg
+		epgKey := prof.TenantName + ":" + epg
 		epgObj := contivModel.FindEndpointGroup(epgKey)
 		if epgObj == nil {
 			log.Errorf("EndpointGroup %s not found", epgKey)
@@ -332,16 +306,60 @@ func (ac *APIController) AppProfileDelete(prof *contivModel.AppProfile) error {
 		}
 	}
 
-	network := contivModel.FindNetwork(nwKey)
-	if network == nil {
-		log.Errorf("Network %s not found", nwKey)
-	} else {
-		modeldb.RemoveLinkSet(&network.LinkSets.AppProfiles, prof)
-		network.Write()
-	}
-	modeldb.AddLinkSet(&tenant.LinkSets.AppProfiles, prof)
+	modeldb.RemoveLinkSet(&tenant.LinkSets.AppProfiles, prof)
 	tenant.Write()
 	return nil
+}
+
+// Cleans up state off endpointGroup and related objects.
+func endpointGroupCleanup(endpointGroup *contivModel.EndpointGroup) {
+	// delete the endpoint group state
+	err := master.DeleteEndpointGroup(endpointGroup.TenantName, endpointGroup.GroupName)
+	if err != nil {
+		log.Errorf("Error deleting endpoint group %+v. Err: %v", endpointGroup, err)
+	}
+
+	// Detach the endpoint group from the Policies
+	for _, policyName := range endpointGroup.Policies {
+		policyKey := endpointGroup.TenantName + ":" + policyName
+
+		// find the policy
+		policy := contivModel.FindPolicy(policyKey)
+		if policy == nil {
+			log.Errorf("Could not find policy %s", policyName)
+			continue
+		}
+
+		// detach policy to epg
+		err := master.PolicyDetach(endpointGroup, policy)
+		if err != nil && err != master.EpgPolicyExists {
+			log.Errorf("Error detaching policy %s from epg %s", policyName, endpointGroup.Key)
+		}
+
+		// Remove links
+		modeldb.RemoveLinkSet(&policy.LinkSets.EndpointGroups, endpointGroup)
+		modeldb.RemoveLinkSet(&endpointGroup.LinkSets.Policies, policy)
+		policy.Write()
+	}
+
+	// Cleanup any external contracts
+	err = cleanupExternalContracts(endpointGroup)
+	if err != nil {
+		log.Errorf("Error cleaning up external contracts for epg %s", endpointGroup.Key)
+	}
+
+	// Remove the endpoint group from network and tenant link sets.
+	nwObjKey := endpointGroup.TenantName + ":" + endpointGroup.NetworkName
+	network := contivModel.FindNetwork(nwObjKey)
+	if network != nil {
+		modeldb.RemoveLinkSet(&network.LinkSets.EndpointGroups, endpointGroup)
+		network.Write()
+	}
+	tenant := contivModel.FindTenant(endpointGroup.TenantName)
+	if tenant != nil {
+		modeldb.RemoveLinkSet(&tenant.LinkSets.EndpointGroups, endpointGroup)
+		tenant.Write()
+	}
 }
 
 // FIXME: hack to allocate unique endpoint group ids
@@ -351,29 +369,28 @@ var globalEpgID = 1
 func (ac *APIController) EndpointGroupCreate(endpointGroup *contivModel.EndpointGroup) error {
 	log.Infof("Received EndpointGroupCreate: %+v", endpointGroup)
 
-	// assign unique endpoint group ids
-	endpointGroup.EndpointGroupID = globalEpgID
-	globalEpgID = globalEpgID + 1
-
 	// Find the tenant
 	tenant := contivModel.FindTenant(endpointGroup.TenantName)
 	if tenant == nil {
 		return core.Errorf("Tenant not found")
 	}
 
-	// Setup links
-	modeldb.AddLink(&endpointGroup.Links.Tenant, tenant)
-	modeldb.AddLinkSet(&tenant.LinkSets.EndpointGroups, endpointGroup)
+	// Find the network
+	nwObjKey := endpointGroup.TenantName + ":" + endpointGroup.NetworkName
+	network := contivModel.FindNetwork(nwObjKey)
+	if network == nil {
+		return core.Errorf("Network %s not found", endpointGroup.NetworkName)
+	}
 
-	// Save the tenant too since we added the links
-	err := tenant.Write()
-	if err != nil {
-		return err
+	// If there is a Network with the same name as this endpointGroup, reject.
+	nameClash := contivModel.FindNetwork(endpointGroup.Key)
+	if nameClash != nil {
+		return core.Errorf("Network %s conflicts with the endpointGroup name",
+			nameClash.NetworkName)
 	}
 
 	// create the endpoint group state
-	err = master.CreateEndpointGroup(endpointGroup.TenantName, endpointGroup.NetworkName,
-		endpointGroup.GroupName, endpointGroup.EndpointGroupID)
+	err := master.CreateEndpointGroup(endpointGroup.TenantName, endpointGroup.NetworkName, endpointGroup.GroupName)
 	if err != nil {
 		log.Errorf("Error creating endpoing group %+v. Err: %v", endpointGroup, err)
 		return err
@@ -386,6 +403,7 @@ func (ac *APIController) EndpointGroupCreate(endpointGroup *contivModel.Endpoint
 		policy := contivModel.FindPolicy(policyKey)
 		if policy == nil {
 			log.Errorf("Could not find policy %s", policyName)
+			endpointGroupCleanup(endpointGroup)
 			return core.Errorf("Policy not found")
 		}
 
@@ -393,6 +411,7 @@ func (ac *APIController) EndpointGroupCreate(endpointGroup *contivModel.Endpoint
 		err = master.PolicyAttach(endpointGroup, policy)
 		if err != nil {
 			log.Errorf("Error attaching policy %s to epg %s", policyName, endpointGroup.Key)
+			endpointGroupCleanup(endpointGroup)
 			return err
 		}
 
@@ -403,8 +422,36 @@ func (ac *APIController) EndpointGroupCreate(endpointGroup *contivModel.Endpoint
 		// Write the policy
 		err = policy.Write()
 		if err != nil {
+			endpointGroupCleanup(endpointGroup)
 			return err
 		}
+	}
+
+	// Setup external contracts this EPG might have.
+	err = setupExternalContracts(endpointGroup, endpointGroup.ExtContractsGrps)
+	if err != nil {
+		log.Errorf("Error setting up external contracts for epg %s", endpointGroup.Key)
+		endpointGroupCleanup(endpointGroup)
+		return err
+	}
+
+	// Setup links
+	modeldb.AddLink(&endpointGroup.Links.Network, network)
+	modeldb.AddLink(&endpointGroup.Links.Tenant, tenant)
+	modeldb.AddLinkSet(&network.LinkSets.EndpointGroups, endpointGroup)
+	modeldb.AddLinkSet(&tenant.LinkSets.EndpointGroups, endpointGroup)
+
+	// Save the tenant and network since we added the links
+	err = network.Write()
+	if err != nil {
+		endpointGroupCleanup(endpointGroup)
+		return err
+	}
+
+	err = tenant.Write()
+	if err != nil {
+		endpointGroupCleanup(endpointGroup)
+		return err
 	}
 
 	return nil
@@ -413,6 +460,11 @@ func (ac *APIController) EndpointGroupCreate(endpointGroup *contivModel.Endpoint
 // EndpointGroupUpdate updates endpoint group
 func (ac *APIController) EndpointGroupUpdate(endpointGroup, params *contivModel.EndpointGroup) error {
 	log.Infof("Received EndpointGroupUpdate: %+v, params: %+v", endpointGroup, params)
+
+	// if the network association was changed, reject the update.
+	if endpointGroup.NetworkName != params.NetworkName {
+		return core.Errorf("Cannot change network association after epg is created.")
+	}
 
 	// Only update policy attachments
 
@@ -473,9 +525,25 @@ func (ac *APIController) EndpointGroupUpdate(endpointGroup, params *contivModel.
 			}
 		}
 	}
-
 	// Update the policy list
 	endpointGroup.Policies = params.Policies
+
+	// For the external contracts, we can keep the update simple. Remove
+	// all that we have now, and update the epg with the new list.
+	// Step 1: Cleanup existing external contracts.
+	err := cleanupExternalContracts(endpointGroup)
+	if err != nil {
+		return err
+	}
+	// Step 2: Add contracts from the update.
+	// Consumed contracts
+	err = setupExternalContracts(endpointGroup, params.ExtContractsGrps)
+	if err != nil {
+		return err
+	}
+
+	// Update the epg itself with the new contracts groups.
+	endpointGroup.ExtContractsGrps = params.ExtContractsGrps
 
 	// if there is an associated app profiles, update that as well
 	profKey := endpointGroup.Links.AppProfile.ObjKey
@@ -501,35 +569,7 @@ func (ac *APIController) EndpointGroupDelete(endpointGroup *contivModel.Endpoint
 			endpointGroup.GroupName, endpointGroup.Links.AppProfile.ObjKey)
 	}
 
-	// delete the endpoint group state
-	err := master.DeleteEndpointGroup(endpointGroup.EndpointGroupID)
-	if err != nil {
-		log.Errorf("Error deleting endpoint group %+v. Err: %v", endpointGroup, err)
-	}
-
-	// Detach the endpoint group from the Policies
-	for _, policyName := range endpointGroup.Policies {
-		policyKey := endpointGroup.TenantName + ":" + policyName
-
-		// find the policy
-		policy := contivModel.FindPolicy(policyKey)
-		if policy == nil {
-			log.Errorf("Could not find policy %s", policyName)
-			continue
-		}
-
-		// detach policy to epg
-		err := master.PolicyDetach(endpointGroup, policy)
-		if err != nil && err != master.EpgPolicyExists {
-			log.Errorf("Error detaching policy %s from epg %s", policyName, endpointGroup.Key)
-		}
-
-		// Remove links
-		modeldb.RemoveLinkSet(&policy.LinkSets.EndpointGroups, endpointGroup)
-		modeldb.RemoveLinkSet(&endpointGroup.LinkSets.Policies, policy)
-		policy.Write()
-	}
-
+	endpointGroupCleanup(endpointGroup)
 	return nil
 }
 
@@ -547,15 +587,11 @@ func (ac *APIController) NetworkCreate(network *contivModel.Network) error {
 		return core.Errorf("Tenant not found")
 	}
 
-	// Setup links
-	modeldb.AddLink(&network.Links.Tenant, tenant)
-	modeldb.AddLinkSet(&tenant.LinkSets.Networks, network)
-
-	// Save the tenant too since we added the links
-	err := tenant.Write()
-	if err != nil {
-		log.Errorf("Error updating tenant state(%+v). Err: %v", tenant, err)
-		return err
+	// If there is an EndpointGroup with the same name as this network, reject.
+	nameClash := contivModel.FindEndpointGroup(network.Key)
+	if nameClash != nil {
+		return core.Errorf("EndpointGroup %s conflicts with the network name",
+			nameClash.GroupName)
 	}
 
 	// Get the state driver
@@ -564,9 +600,10 @@ func (ac *APIController) NetworkCreate(network *contivModel.Network) error {
 		return err
 	}
 
-	// Build networ config
+	// Build network config
 	networkCfg := intent.ConfigNetwork{
 		Name:       network.NetworkName,
+		NwType:     network.NwType,
 		PktTagType: network.Encap,
 		PktTag:     network.PktTag,
 		SubnetCIDR: network.Subnet,
@@ -577,6 +614,17 @@ func (ac *APIController) NetworkCreate(network *contivModel.Network) error {
 	err = master.CreateNetwork(networkCfg, stateDriver, network.TenantName)
 	if err != nil {
 		log.Errorf("Error creating network {%+v}. Err: %v", network, err)
+		return err
+	}
+
+	// Setup links
+	modeldb.AddLink(&network.Links.Tenant, tenant)
+	modeldb.AddLinkSet(&tenant.LinkSets.Networks, network)
+
+	// Save the tenant too since we added the links
+	err = tenant.Write()
+	if err != nil {
+		log.Errorf("Error updating tenant state(%+v). Err: %v", tenant, err)
 		return err
 	}
 
@@ -597,13 +645,6 @@ func (ac *APIController) NetworkDelete(network *contivModel.Network) error {
 	tenant := contivModel.FindTenant(network.TenantName)
 	if tenant == nil {
 		return core.Errorf("Tenant not found")
-	}
-
-	// if the network has associated app profiles, fail the delete
-	profCount := len(network.LinkSets.AppProfiles)
-	if profCount != 0 {
-		return core.Errorf("cannot delete %s, has %d app profiles",
-			network.NetworkName, profCount)
 	}
 
 	// if the network has associated epgs, fail the delete
@@ -733,6 +774,10 @@ func (ac *APIController) RuleCreate(rule *contivModel.Rule) error {
 		if rule.FromNetwork != "" && rule.FromIpAddress != "" {
 			return errors.New("Can not specify both from network and from ip address")
 		}
+
+		if rule.FromNetwork != "" && rule.FromEndpointGroup != "" {
+			return errors.New("Can not specify both from network and from EndpointGroup")
+		}
 	} else if rule.Direction == "out" {
 		if rule.FromNetwork != "" || rule.FromEndpointGroup != "" || rule.FromIpAddress != "" {
 			return errors.New("Can not specify 'from' parameters in outgoing rule")
@@ -740,8 +785,48 @@ func (ac *APIController) RuleCreate(rule *contivModel.Rule) error {
 		if rule.ToNetwork != "" && rule.ToIpAddress != "" {
 			return errors.New("Can not specify both to-network and to-ip address")
 		}
+		if rule.ToNetwork != "" && rule.ToEndpointGroup != "" {
+			return errors.New("Can not specify both to-network and to-EndpointGroup")
+		}
 	} else {
 		return errors.New("Invalid direction for the rule")
+	}
+
+	// Make sure endpoint groups and networks referred exists.
+	if rule.FromEndpointGroup != "" {
+		epgKey := rule.TenantName + ":" + rule.FromEndpointGroup
+
+		// find the endpoint group
+		epg := contivModel.FindEndpointGroup(epgKey)
+		if epg == nil {
+			log.Errorf("Error finding endpoint group %s", epgKey)
+			return errors.New("endpoint group not found")
+		}
+	} else if rule.ToEndpointGroup != "" {
+		epgKey := rule.TenantName + ":" + rule.ToEndpointGroup
+
+		// find the endpoint group
+		epg := contivModel.FindEndpointGroup(epgKey)
+		if epg == nil {
+			log.Errorf("Error finding endpoint group %s", epgKey)
+			return errors.New("endpoint group not found")
+		}
+	} else if rule.FromNetwork != "" {
+		netKey := rule.TenantName + ":" + rule.FromNetwork
+
+		net := contivModel.FindNetwork(netKey)
+		if net == nil {
+			log.Errorf("Network %s not found", netKey)
+			return errors.New("FromNetwork not found")
+		}
+	} else if rule.ToNetwork != "" {
+		netKey := rule.TenantName + ":" + rule.ToNetwork
+
+		net := contivModel.FindNetwork(netKey)
+		if net == nil {
+			log.Errorf("Network %s not found", netKey)
+			return errors.New("ToNetwork not found")
+		}
 	}
 
 	policyKey := rule.TenantName + ":" + rule.PolicyName
@@ -810,137 +895,6 @@ func (ac *APIController) RuleDelete(rule *contivModel.Rule) error {
 	// Update any affected app profiles
 	syncAppProfile(policy)
 
-	return nil
-}
-
-// ServiceCreate creates service
-func (ac *APIController) ServiceCreate(service *contivModel.Service) error {
-	log.Infof("Received ServiceCreate: %+v", service)
-
-	// check params
-	if (service.TenantName == "") || (service.AppName == "") {
-		return core.Errorf("Invalid parameters")
-	}
-
-	// Make sure tenant exists
-	tenant := contivModel.FindTenant(service.TenantName)
-	if tenant == nil {
-		return core.Errorf("Tenant not found")
-	}
-
-	// Check if user specified any networks
-	if len(service.Networks) == 0 {
-		service.Networks = append(service.Networks, "private")
-	}
-
-	// link service with network
-	for _, netName := range service.Networks {
-		netKey := service.TenantName + ":" + netName
-		network := contivModel.FindNetwork(netKey)
-		if network == nil {
-			log.Errorf("Service: %s could not find network %s", service.Key, netKey)
-			return core.Errorf("Network not found")
-		}
-
-		// Link the network
-		modeldb.AddLinkSet(&service.LinkSets.Networks, network)
-		modeldb.AddLinkSet(&network.LinkSets.Services, service)
-
-		// save the network
-		err := network.Write()
-		if err != nil {
-			return err
-		}
-	}
-
-	// Check if user specified any endpoint group for the service
-	if len(service.EndpointGroups) == 0 {
-		// Create one default endpointGroup per network
-		for _, netName := range service.Networks {
-			// params for default endpoint group
-			dfltEpgName := service.AppName + "." + service.ServiceName + "." + netName
-			endpointGroup := contivModel.EndpointGroup{
-				Key:         service.TenantName + ":" + dfltEpgName,
-				TenantName:  service.TenantName,
-				NetworkName: netName,
-				GroupName:   dfltEpgName,
-			}
-
-			// Create default endpoint group for the service
-			err := contivModel.CreateEndpointGroup(&endpointGroup)
-			if err != nil {
-				log.Errorf("Error creating endpoint group: %+v, Err: %v", endpointGroup, err)
-				return err
-			}
-
-			// Add the endpoint group to the list
-			service.EndpointGroups = append(service.EndpointGroups, dfltEpgName)
-		}
-	}
-
-	// Link the service and endpoint group
-	for _, epgName := range service.EndpointGroups {
-		endpointGroup := contivModel.FindEndpointGroup(service.TenantName + ":" + epgName)
-		if endpointGroup == nil {
-			log.Errorf("Error: could not find endpoint group: %s", epgName)
-			return core.Errorf("could not find endpointGroup")
-		}
-
-		// setup links
-		modeldb.AddLinkSet(&service.LinkSets.EndpointGroups, endpointGroup)
-		modeldb.AddLinkSet(&endpointGroup.LinkSets.Services, service)
-
-		// save the endpointGroup
-		err := endpointGroup.Write()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ServiceUpdate updates service
-func (ac *APIController) ServiceUpdate(service, params *contivModel.Service) error {
-	log.Infof("Received ServiceUpdate: %+v, params: %+v", service, params)
-	return nil
-}
-
-// ServiceDelete deletes service
-func (ac *APIController) ServiceDelete(service *contivModel.Service) error {
-	log.Infof("Received ServiceDelete: %+v", service)
-	return nil
-}
-
-// ServiceInstanceCreate creates a service instance
-func (ac *APIController) ServiceInstanceCreate(serviceInstance *contivModel.ServiceInstance) error {
-	log.Infof("Received ServiceInstanceCreate: %+v", serviceInstance)
-	inst := serviceInstance
-
-	// Find the service
-	serviceKey := inst.TenantName + ":" + inst.AppName + ":" + inst.ServiceName
-	service := contivModel.FindService(serviceKey)
-	if service == nil {
-		log.Errorf("Service %s not found for instance: %+v", serviceKey, inst)
-		return core.Errorf("Service not found")
-	}
-
-	// Add links
-	modeldb.AddLinkSet(&service.LinkSets.Instances, inst)
-	modeldb.AddLink(&inst.Links.Service, service)
-
-	return nil
-}
-
-// ServiceInstanceUpdate updates a service instance
-func (ac *APIController) ServiceInstanceUpdate(serviceInstance, params *contivModel.ServiceInstance) error {
-	log.Infof("Received ServiceInstanceUpdate: %+v, params: %+v", serviceInstance, params)
-	return nil
-}
-
-// ServiceInstanceDelete deletes a service instance
-func (ac *APIController) ServiceInstanceDelete(serviceInstance *contivModel.ServiceInstance) error {
-	log.Infof("Received ServiceInstanceDelete: %+v", serviceInstance)
 	return nil
 }
 
@@ -1054,5 +1008,159 @@ func (ac *APIController) BgpDelete(bgpCfg *contivModel.Bgp) error {
 
 //BgpUpdate updates bgp config
 func (ac *APIController) BgpUpdate(oldbgpCfg *contivModel.Bgp, NewbgpCfg *contivModel.Bgp) error {
+	log.Infof("Received BgpUpdate: %+v", NewbgpCfg)
+
+	if NewbgpCfg.Hostname == "" {
+		return core.Errorf("Invalid host name")
+	}
+
+	// Get the state driver
+	stateDriver, err := utils.GetStateDriver()
+	if err != nil {
+		return err
+	}
+
+	// Build bgp config
+	bgpIntentCfg := intent.ConfigBgp{
+		Hostname:   NewbgpCfg.Hostname,
+		RouterIP:   NewbgpCfg.Routerip,
+		As:         NewbgpCfg.As,
+		NeighborAs: NewbgpCfg.NeighborAs,
+		Neighbor:   NewbgpCfg.Neighbor,
+	}
+
+	// Add the Bgp neighbor
+	err = master.AddBgp(stateDriver, &bgpIntentCfg)
+	if err != nil {
+		log.Errorf("Error creating Bgp neighbor {%+v}. Err: %v", NewbgpCfg.Neighbor, err)
+		return err
+	}
+
 	return nil
+}
+
+//ServiceLBCreate creates service object
+func (ac *APIController) ServiceLBCreate(serviceCfg *contivModel.ServiceLB) error {
+
+	log.Infof("Received Service Load Balancer create: %+v", serviceCfg)
+
+	if serviceCfg.ServiceName == "" {
+		return core.Errorf("Invalid service name")
+	}
+	if serviceCfg.TenantName == "" {
+		serviceCfg.TenantName = "default"
+	}
+
+	if len(serviceCfg.Selectors) == 0 {
+		return core.Errorf("Invalid selector options")
+	}
+
+	if !validatePorts(serviceCfg.Ports) {
+		return core.Errorf("Invalid Port maping . Port format is - Port:TargetPort:Protocol")
+	}
+
+	// Get the state driver
+	stateDriver, err := utils.GetStateDriver()
+	if err != nil {
+		return err
+	}
+
+	// Build service config
+	serviceIntentCfg := intent.ConfigServiceLB{
+		ServiceName: serviceCfg.ServiceName,
+		Tenant:      serviceCfg.TenantName,
+		Network:     serviceCfg.NetworkName,
+		IPAddress:   serviceCfg.IpAddress,
+	}
+	serviceIntentCfg.Ports = append(serviceIntentCfg.Ports, serviceCfg.Ports...)
+
+	serviceIntentCfg.Selectors = make(map[string]string)
+
+	for _, selector := range serviceCfg.Selectors {
+		if validateSelectors(selector) {
+			key := strings.Split(selector, "=")[0]
+			value := strings.Split(selector, "=")[1]
+			serviceIntentCfg.Selectors[key] = value
+		} else {
+			return core.Errorf("Invalid selector %s. selector format is key1=value1", selector)
+		}
+	}
+	// Add the service object
+	err = master.CreateServiceLB(stateDriver, &serviceIntentCfg)
+	if err != nil {
+		log.Errorf("Error creating service  {%+v}. Err: %v", serviceIntentCfg.ServiceName, err)
+		return err
+	}
+	return nil
+
+}
+
+//ServiceLBUpdate updates service object
+func (ac *APIController) ServiceLBUpdate(oldServiceCfg *contivModel.ServiceLB, serviceCfg *contivModel.ServiceLB) error {
+	return ac.ServiceLBCreate(serviceCfg)
+}
+
+//ServiceLBDelete deletes service object
+func (ac *APIController) ServiceLBDelete(serviceCfg *contivModel.ServiceLB) error {
+
+	log.Info("Received Service Load Balancer delete : {%+v}", serviceCfg)
+
+	if serviceCfg.ServiceName == "" {
+		return core.Errorf("Invalid service name")
+	}
+	if serviceCfg.TenantName == "" {
+		serviceCfg.TenantName = "default"
+	}
+	// Get the state driver
+	stateDriver, err := utils.GetStateDriver()
+	if err != nil {
+		return err
+	}
+
+	// Add the service object
+	err = master.DeleteServiceLB(stateDriver, serviceCfg.ServiceName, serviceCfg.TenantName)
+	if err != nil {
+		log.Errorf("Error deleting Service Load Balancer object {%+v}. Err: %v", serviceCfg.ServiceName, err)
+		return err
+	}
+	return nil
+
+}
+
+func validateSelectors(selector string) bool {
+	if strings.Count(selector, "=") == 1 {
+		return true
+	}
+	return false
+}
+
+func validatePorts(ports []string) bool {
+	for _, x := range ports {
+		svcPort := strings.Split(x, ":")[0]
+		provPort := strings.Split(x, ":")[1]
+		protocol := strings.Split(x, ":")[2]
+
+		if provPort == "" || protocol == "" || svcPort == "" {
+			return false
+		}
+
+		_, err := strconv.Atoi(provPort)
+		if err != nil {
+			return false
+		}
+		_, err = strconv.Atoi(svcPort)
+		if err != nil {
+			return false
+		}
+
+		switch protocol {
+		case "TCP":
+			return true
+		case "UDP":
+			return true
+		default:
+			return false
+		}
+	}
+	return true
 }

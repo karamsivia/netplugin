@@ -55,6 +55,10 @@ var Commands = []cli.Command{
 						Name:  "policy, p",
 						Usage: "Policy List (separated by commas)",
 					},
+					cli.StringFlag{
+						Name:  "external-contracts, e",
+						Usage: "External contracts(separated by commas)",
+					},
 				},
 				Action: createEndpointGroup,
 			},
@@ -62,7 +66,7 @@ var Commands = []cli.Command{
 				Name:      "rm",
 				Aliases:   []string{"delete"},
 				Usage:     "Delete an endpoint group",
-				ArgsUsage: "[network] [group]",
+				ArgsUsage: "[group]",
 				Flags:     []cli.Flag{tenantFlag},
 				Action:    deleteEndpointGroup,
 			},
@@ -103,6 +107,11 @@ var Commands = []cli.Command{
 				ArgsUsage: "[network]",
 				Flags: []cli.Flag{
 					tenantFlag,
+					cli.StringFlag{
+						Name:  "nw-type, n",
+						Usage: "Network Type (infra or data)",
+						Value: "data",
+					},
 					cli.StringFlag{
 						Name:  "encap, e",
 						Usage: "Encap type (vlan or vxlan)",
@@ -264,6 +273,46 @@ var Commands = []cli.Command{
 		},
 	},
 	{
+		Name:  "external-contracts",
+		Usage: "External contracts",
+		Subcommands: []cli.Command{
+			{
+				Name:    "ls",
+				Aliases: []string{"list"},
+				Usage:   "List external contracts",
+				Flags:   []cli.Flag{quietFlag, jsonFlag, tenantFlag},
+				Action:  listExternalContracts,
+			},
+			{
+				Name:    "rm",
+				Aliases: []string{"delete"},
+				Usage:   "Delete external contracts",
+				Flags:   []cli.Flag{tenantFlag},
+				Action:  deleteExternalContracts,
+			},
+			{
+				Name:  "create",
+				Usage: "Create external contracts",
+				Flags: []cli.Flag{
+					tenantFlag,
+					cli.BoolFlag{
+						Name:  "consumed, c",
+						Usage: "External contracts type - consumed",
+					},
+					cli.BoolFlag{
+						Name:  "provided, p",
+						Usage: "External contracts type - provided",
+					},
+					cli.StringFlag{
+						Name:  "contracts, a",
+						Usage: "Contracts (separated by commas)",
+					},
+				},
+				Action: createExternalContracts,
+			},
+		},
+	},
+	{
 		Name:  "global",
 		Usage: "Global information",
 		Subcommands: []cli.Command{
@@ -281,7 +330,7 @@ var Commands = []cli.Command{
 				Flags: []cli.Flag{
 					cli.StringFlag{
 						Name:  "fabric-mode, f",
-						Usage: "Fabric mode (aci or default)",
+						Usage: "Fabric mode (aci, aci-opflex or default)",
 						Value: "default",
 					},
 					cli.StringFlag{
@@ -356,7 +405,7 @@ var Commands = []cli.Command{
 			{
 				Name:      "create",
 				Usage:     "Create an application profile",
-				ArgsUsage: "[network] [app-profile]",
+				ArgsUsage: "[app-profile]",
 				Flags: []cli.Flag{
 					tenantFlag,
 					cli.StringFlag{
@@ -369,7 +418,7 @@ var Commands = []cli.Command{
 			{
 				Name:      "update",
 				Usage:     "Update an application profile",
-				ArgsUsage: "[network] [app-profile]",
+				ArgsUsage: "[app-profile]",
 				Flags: []cli.Flag{
 					tenantFlag,
 					cli.StringFlag{
@@ -383,7 +432,7 @@ var Commands = []cli.Command{
 				Name:      "rm",
 				Aliases:   []string{"delete"},
 				Usage:     "Delete an application profile",
-				ArgsUsage: "[network] [app-profile]",
+				ArgsUsage: "[app-profile]",
 				Flags:     []cli.Flag{tenantFlag},
 				Action:    deleteAppProfile,
 			},
@@ -402,6 +451,61 @@ var Commands = []cli.Command{
 				ArgsUsage: "[network] [app-profile]",
 				Flags:     []cli.Flag{tenantFlag, allFlag, jsonFlag, quietFlag},
 				Action:    listAppProfEpgs,
+			},
+		},
+	},
+	{
+		Name:  "service",
+		Usage: "service object creation",
+		Subcommands: []cli.Command{
+			{
+				Name:      "ls",
+				Aliases:   []string{"list"},
+				Usage:     "List service objects",
+				ArgsUsage: "[servicename]",
+				Flags:     []cli.Flag{tenantFlag, allFlag, jsonFlag, quietFlag},
+				Action:    listServiceLB,
+			},
+			{
+				Name:      "rm",
+				Aliases:   []string{"delete"},
+				Usage:     "Delete service object",
+				ArgsUsage: "[servicename]",
+				Flags: []cli.Flag{
+					cli.StringFlag{
+						Name:  "tenant,t",
+						Usage: "service tenant",
+					},
+				},
+				Action: deleteServiceLB,
+			},
+			{
+				Name:      "create",
+				Usage:     "Create Service object.",
+				ArgsUsage: "[servicename]",
+				Flags: []cli.Flag{
+					cli.StringFlag{
+						Name:  "tenant,t",
+						Usage: "service tenant",
+					},
+					cli.StringFlag{
+						Name:  "network,s",
+						Usage: "service subnet",
+					},
+					cli.StringSliceFlag{
+						Name:  "selector,l",
+						Usage: "service selector .Usage: --selector=key1=value1 --selector=key2=value2",
+					},
+					cli.StringSliceFlag{
+						Name:  "port,p",
+						Usage: "service/provider Port Usage- --port=svcPort1:provPort1:protocol --port=svcPort2:provPort2:protocol",
+					},
+					cli.StringFlag{
+						Name:  "preferred-ip,ip",
+						Usage: "preferred ip address",
+					},
+				},
+				Action: createServiceLB,
 			},
 		},
 	},

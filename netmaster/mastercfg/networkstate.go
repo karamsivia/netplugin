@@ -45,12 +45,14 @@ type CfgNetworkState struct {
 	core.CommonState
 	Tenant      string        `json:"tenant"`
 	NetworkName string        `json:"networkName"`
+	NwType      string        `json:"nwType"`
 	PktTagType  string        `json:"pktTagType"`
 	PktTag      int           `json:"pktTag"`
 	ExtPktTag   int           `json:"extPktTag"`
 	SubnetIP    string        `json:"subnetIP"`
 	SubnetLen   uint          `json:"subnetLen"`
 	Gateway     string        `json:"gateway"`
+	EpAddrCount int           `json:"epAddrCount"`
 	EpCount     int           `json:"epCount"`
 	IPAllocMap  bitset.BitSet `json:"ipAllocMap"`
 	DNSServer   string        `json:"dnsServer"`
@@ -83,4 +85,16 @@ func (s *CfgNetworkState) WatchAll(rsps chan core.WatchState) error {
 func (s *CfgNetworkState) Clear() error {
 	key := fmt.Sprintf(networkConfigPath, s.ID)
 	return s.StateDriver.ClearState(key)
+}
+
+// IncrEpCount Increments endpoint count
+func (s *CfgNetworkState) IncrEpCount() error {
+	s.EpCount++
+	return s.Write()
+}
+
+// DecrEpCount decrements endpoint count
+func (s *CfgNetworkState) DecrEpCount() error {
+	s.EpCount--
+	return s.Write()
 }

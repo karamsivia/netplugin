@@ -31,10 +31,17 @@ type appNwSpec struct {
 }
 
 type epgSpec struct {
-	Name     string   `json:"name,omitempty"`
-	VlanTag  string   `json:"vlantag,omitempty"`
-	ServPort []string `json:"servport,omitempty"`
-	Uses     []string `json:"uses,omitempty"`
+	Name          string       `json:"name,omitempty"`
+	VlanTag       string       `json:"vlantag,omitempty"`
+	Filters       []filterInfo `json:"filterinfo,omitempty"`
+	Uses          []string     `json:"uses,omitempty"`
+	ProvContracts []string     `json:"provcontracts,omitempty"`
+	ConsContracts []string     `json:"conscontracts,omitempty"`
+}
+
+type filterInfo struct {
+	Protocol string `json:"protocol,omitempty"`
+	ServPort string `json:"servport,omitempty"`
 }
 
 type epgMap struct {
@@ -86,7 +93,6 @@ func (ans *appNwSpec) validate() error {
 
 func (ans *appNwSpec) launch() error {
 
-	ans.TenantName = "CONTIV-" + ans.TenantName
 	url := proxyURL + "createAppProf"
 	if err := httpPost(url, ans); err != nil {
 		log.Errorf("Validation failed. Error: %v", err)
@@ -101,12 +107,16 @@ func appendEpgInfo(eMap *epgMap, epgObj *contivModel.EndpointGroup, stateDriver 
 	epg := epgSpec{}
 	epg.Name = epgObj.GroupName
 
-	//update vlantag from EpGroupState
+	log.Infof("Processing EPG: %+v", epgObj)
+	// Get EPG key for the endpoint group
+	epgKey := mastercfg.GetEndpointGroupKey(epgObj.GroupName, epgObj.TenantName)
+
+	// update vlantag from EpGroupState
 	epgCfg := &mastercfg.EndpointGroupState{}
 	epgCfg.StateDriver = stateDriver
-	eErr := epgCfg.Read(strconv.Itoa(epgObj.EndpointGroupID))
+	eErr := epgCfg.Read(epgKey)
 	if eErr != nil {
-		log.Errorf("Error reading epg %v %v", epgObj.GroupName, eErr)
+		log.Errorf("Error reading epg %v %v", epgKey, eErr)
 		return eErr
 	}
 
@@ -134,10 +144,9 @@ func appendEpgInfo(eMap *epgMap, epgObj *contivModel.EndpointGroup, stateDriver 
 				log.Debugf("==Ignoring deny rule %v", ruleName)
 				continue
 			}
-
-			//TODO: make this a list and add protocol
-			epg.ServPort = append(epg.ServPort, strconv.Itoa(rule.Port))
-			log.Debugf("Service port: %v", strconv.Itoa(rule.Port))
+			singleFilter := filterInfo{Protocol: rule.Protocol, ServPort: strconv.Itoa(rule.Port)}
+			epg.Filters = append(epg.Filters, singleFilter)
+			log.Debugf("Filter information: %v", singleFilter)
 
 			if rule.FromEndpointGroup == "" {
 				log.Debugf("User unspecified %v == exposed contract", ruleName)
@@ -159,6 +168,30 @@ func appendEpgInfo(eMap *epgMap, epgObj *contivModel.EndpointGroup, stateDriver 
 		}
 
 	}
+
+	// Append external contracts.
+	tenant := epgObj.TenantName
+	for _, contractsGrp := range epgObj.ExtContractsGrps {
+		contractsGrpKey := tenant + ":" + contractsGrp
+		contractsGrpObj := contivModel.FindExtContractsGroup(contractsGrpKey)
+
+		if contractsGrpObj == nil {
+			errStr := fmt.Sprintf("Contracts %v not found for epg: %v", contractsGrp, epg.Name)
+			return errors.New(errStr)
+		}
+		if contractsGrpObj.ContractsType == "consumed" {
+			epg.ConsContracts = append(epg.ConsContracts, contractsGrpObj.Contracts...)
+		} else if contractsGrpObj.ContractsType == "provided" {
+			epg.ProvContracts = append(epg.ProvContracts, contractsGrpObj.Contracts...)
+		} else {
+			// Should not be here.
+			errStr := fmt.Sprintf("Invalid contracts type %v", contractsGrp)
+			return errors.New(errStr)
+		}
+	}
+
+	log.Debugf("Copied over %d externally defined consumed contracts", len(epg.ConsContracts))
+	log.Debugf("Copied over %d externally defined provided contracts", len(epg.ProvContracts))
 
 	// add any saved uses info before overwriting
 	savedEpg, ok := eMap.Specs[epg.Name]
@@ -230,6 +263,7 @@ func CreateAppNw(app *contivModel.AppProfile) error {
 	ans.Subnet = nwCfg.Gateway + "/" + strconv.Itoa(int(nwCfg.SubnetLen))
 	log.Debugf("Nw %v subnet %v", netName, ans.Subnet)
 
+	log.Infof("Launching appNwSpec: %+v", ans)
 	ans.launch()
 
 	return nil
@@ -249,7 +283,7 @@ func DeleteAppNw(app *contivModel.AppProfile) error {
 	}
 
 	ans := &appNwSpec{}
-	ans.TenantName = "CONTIV-" + app.TenantName
+	ans.TenantName = app.TenantName
 	ans.AppName = app.AppProfileName
 
 	url := proxyURL + "deleteAppProf"

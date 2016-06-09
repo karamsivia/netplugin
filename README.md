@@ -18,6 +18,8 @@ Full, comprehensive documentation is available on the website:
 
 http://docs.contiv.io
 
+Getting-started videos are available on [YouTube](https://www.youtube.com/watch?v=KzansAxCBQE&list=PL2k86RlAekM_g6csRwSRQAWvln5SmgicN).
+
 ### Getting Started
 
 This will provide you with a minimal experience of uploading the intent and
@@ -35,15 +37,15 @@ $ vagrant ssh netplugin-node1
 #### Step 2: Create a network
 
 ```
-$ netctl net create contiv-net --subnet=20.1.1.0/24 --gateway=20.1.1.254 --pkt-tag=1001
+$ netctl net create contiv-net --subnet=20.1.1.0/24
 ```
 
 #### Step 3: Run your containers and enjoy the networking!
 
 ```
-$ docker run -itd --name=web --net=contiv-net ubuntu /bin/bash
-$ docker run -itd --name=db --net=contiv-net ubuntu /bin/bash
-$ docker exec -it web /bin/bash
+$ docker run -itd --name=web --net=contiv-net alpine /bin/sh
+$ docker run -itd --name=db --net=contiv-net alpine /bin/sh
+$ docker exec -it web /bin/sh
 < inside the container >
 root@f90e7fd409c4:/# ping db
 PING db (20.1.1.3) 56(84) bytes of data.

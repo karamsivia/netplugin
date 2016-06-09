@@ -169,11 +169,7 @@ func createCommonState(stateDriver core.StateDriver) error {
 
 func initOvsDriver(t *testing.T) *OvsDriver {
 	driver := &OvsDriver{}
-	ovsConfig := &OvsDriverConfig{}
-	ovsConfig.Ovs.DbIP = ""
-	ovsConfig.Ovs.DbPort = 0
 	fMode := "bridge"
-	config := &core.Config{V: ovsConfig}
 	stateDriver := &state.FakeStateDriver{}
 	stateDriver.Init(nil)
 	instInfo := &core.InstanceInfo{HostLabel: testHostLabel,
@@ -184,7 +180,7 @@ func initOvsDriver(t *testing.T) *OvsDriver {
 		t.Fatalf("common state creation failed. Error: %s", err)
 	}
 
-	err = driver.Init(config, instInfo)
+	err = driver.Init(instInfo)
 	if err != nil {
 		t.Fatalf("driver init failed. Error: %s", err)
 	}
@@ -199,11 +195,7 @@ func TestOvsDriverInit(t *testing.T) {
 
 func TestOvsDriverInitStatefulStart(t *testing.T) {
 	driver := &OvsDriver{}
-	ovsConfig := &OvsDriverConfig{}
-	ovsConfig.Ovs.DbIP = ""
-	ovsConfig.Ovs.DbPort = 0
 	fMode := "bridge"
-	config := &core.Config{V: ovsConfig}
 	stateDriver := &state.FakeStateDriver{}
 	stateDriver.Init(nil)
 	instInfo := &core.InstanceInfo{HostLabel: testHostLabelStateful,
@@ -217,7 +209,7 @@ func TestOvsDriverInitStatefulStart(t *testing.T) {
 		t.Fatalf("writing driver oper state failed. Error: %s", err)
 	}
 
-	err = driver.Init(config, instInfo)
+	err = driver.Init(instInfo)
 	if err != nil {
 		t.Fatalf("driver init failed. Error: %s", err)
 	}
@@ -232,18 +224,15 @@ func TestOvsDriverInitStatefulStart(t *testing.T) {
 
 func TestOvsDriverInitInvalidConfig(t *testing.T) {
 	driver := &OvsDriver{}
-	config := &core.Config{V: nil}
-	stateDriver := &state.FakeStateDriver{}
-	stateDriver.Init(nil)
 	instInfo := &core.InstanceInfo{HostLabel: testHostLabel,
-		StateDriver: stateDriver}
+		StateDriver: nil, FwdMode: "bridge"}
 
-	err := driver.Init(config, instInfo)
+	err := driver.Init(nil)
 	if err == nil {
 		t.Fatalf("driver init succeeded. Should have failed!")
 	}
 
-	err = driver.Init(nil, instInfo)
+	err = driver.Init(instInfo)
 	if err == nil {
 		t.Fatalf("driver init succeeded. Should have failed!")
 	}
@@ -253,15 +242,11 @@ func TestOvsDriverInitInvalidConfig(t *testing.T) {
 
 func TestOvsDriverInitInvalidState(t *testing.T) {
 	driver := &OvsDriver{}
-	ovsConfig := &OvsDriverConfig{}
-	ovsConfig.Ovs.DbIP = ""
-	ovsConfig.Ovs.DbPort = 0
 	fMode := "bridge"
-	config := &core.Config{V: ovsConfig}
 	instInfo := &core.InstanceInfo{HostLabel: testHostLabel, StateDriver: nil,
 		FwdMode: fMode}
 
-	err := driver.Init(config, instInfo)
+	err := driver.Init(instInfo)
 	if err == nil {
 		t.Fatalf("driver init succeeded. Should have failed!")
 	}
@@ -270,12 +255,8 @@ func TestOvsDriverInitInvalidState(t *testing.T) {
 
 func TestOvsDriverInitInvalidInstanceInfo(t *testing.T) {
 	driver := &OvsDriver{}
-	ovsConfig := &OvsDriverConfig{}
-	ovsConfig.Ovs.DbIP = ""
-	ovsConfig.Ovs.DbPort = 0
-	config := &core.Config{V: ovsConfig}
 
-	err := driver.Init(config, nil)
+	err := driver.Init(nil)
 	if err == nil {
 		t.Fatalf("driver init succeeded. Should have failed!")
 	}
@@ -305,7 +286,7 @@ func TestOvsDriverCreateEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("network creation failed. Error: %s", err)
 	}
-	defer func() { driver.DeleteNetwork(testOvsNwID, "", testPktTag, testExtPktTag, testGateway, testTenant) }()
+	defer func() { driver.DeleteNetwork(testOvsNwID, "", "", testPktTag, testExtPktTag, testGateway, testTenant) }()
 
 	// create endpoint
 	err = driver.CreateEndpoint(id)
@@ -340,7 +321,7 @@ func TestOvsDriverCreateEndpointStateful(t *testing.T) {
 		t.Fatalf("network creation failed. Error: %s", err)
 	}
 	defer func() {
-		driver.DeleteNetwork(testOvsNwIDStateful, "", testPktTagStateful, testExtPktTag, testGateway, testTenant)
+		driver.DeleteNetwork(testOvsNwIDStateful, "", "", testPktTagStateful, testExtPktTag, testGateway, testTenant)
 	}()
 
 	// Create endpoint
@@ -380,7 +361,7 @@ func TestOvsDriverCreateEndpointStatefulStateMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("network creation failed. Error: %s", err)
 	}
-	defer func() { driver.DeleteNetwork(testOvsNwID, "", testPktTag, testExtPktTag, testGateway, testTenant) }()
+	defer func() { driver.DeleteNetwork(testOvsNwID, "", "", testPktTag, testExtPktTag, testGateway, testTenant) }()
 
 	// create second network
 	err = driver.CreateNetwork(testOvsNwIDStateful)
@@ -388,7 +369,7 @@ func TestOvsDriverCreateEndpointStatefulStateMismatch(t *testing.T) {
 		t.Fatalf("network creation failed. Error: %s", err)
 	}
 	defer func() {
-		driver.DeleteNetwork(testOvsNwIDStateful, "", testPktTagStateful, testExtPktTag, testGateway, testTenant)
+		driver.DeleteNetwork(testOvsNwIDStateful, "", "", testPktTagStateful, testExtPktTag, testGateway, testTenant)
 	}()
 
 	// create endpoint
@@ -441,7 +422,7 @@ func TestOvsDriverDeleteEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("network creation failed. Error: %s", err)
 	}
-	defer func() { driver.DeleteNetwork(testOvsNwID, "", testPktTag, testExtPktTag, testGateway, testTenant) }()
+	defer func() { driver.DeleteNetwork(testOvsNwID, "", "", testPktTag, testExtPktTag, testGateway, testTenant) }()
 
 	// create endpoint
 	err = driver.CreateEndpoint(id)
@@ -490,5 +471,44 @@ func TestOvsDriverAddUplink(t *testing.T) {
 	if err != nil || !strings.Contains(string(output), testVlanUplinkPort) {
 		t.Fatalf("interface lookup failed. Error: %s expected port: %s Output: %s",
 			err, testVlanUplinkPort, output)
+	}
+}
+
+func TestOvsDriverVethNameConflict(t *testing.T) {
+	driver := initOvsDriver(t)
+	defer func() { driver.Deinit() }()
+
+	// Create conflicting Veth interface pairs
+	intfNum := driver.oper.CurrPortNum + 1
+	createVethPair(fmt.Sprintf("vport%d", intfNum), fmt.Sprintf("vvport%d", intfNum))
+	createVethPair(fmt.Sprintf("vport%d", intfNum+1), fmt.Sprintf("vvport%d", intfNum+1))
+	createVethPair(fmt.Sprintf("uport%d", intfNum+2), fmt.Sprintf("vvport%d", intfNum+2))
+	defer func() { deleteVethPair(fmt.Sprintf("vport%d", intfNum), fmt.Sprintf("vvport%d", intfNum)) }()
+	defer func() { deleteVethPair(fmt.Sprintf("vport%d", intfNum+1), fmt.Sprintf("vvport%d", intfNum+1)) }()
+	defer func() { deleteVethPair(fmt.Sprintf("uport%d", intfNum+2), fmt.Sprintf("vvport%d", intfNum+2)) }()
+
+	// add a duplicate interface entry into OVS bridge
+	exec.Command("sudo", "ovs-vsctl", "add-port", "contivVlanBridge", fmt.Sprintf("vvport%d", intfNum+3)).CombinedOutput()
+
+	// create network
+	err := driver.CreateNetwork(testOvsNwID)
+	if err != nil {
+		t.Fatalf("network creation failed. Error: %s", err)
+	}
+	defer func() { driver.DeleteNetwork(testOvsNwID, "", "", testPktTag, testExtPktTag, testGateway, testTenant) }()
+
+	// create endpoint
+	err = driver.CreateEndpoint(createEpID)
+	if err != nil {
+		t.Fatalf("endpoint creation failed. Error: %s", err)
+	}
+	defer func() { driver.DeleteEndpoint(createEpID) }()
+
+	// verify interface got creates
+	output, err := exec.Command("ovs-vsctl", "list", "Interface").CombinedOutput()
+	if err != nil || !strings.Contains(string(output), fmt.Sprintf("vport%d", intfNum+3)) ||
+		strings.Contains(string(output), fmt.Sprintf("tag                 : %d", testPktTag)) {
+		t.Fatalf("interface lookup failed. Error: %s expected port: %s Output: %s",
+			err, fmt.Sprintf("vport%d", intfNum+3), output)
 	}
 }

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"sync"
 
 	"github.com/contiv/netplugin/core"
@@ -28,6 +27,7 @@ import (
 	"github.com/contiv/netplugin/netmaster/mastercfg"
 	"github.com/contiv/netplugin/netmaster/objApi"
 	"github.com/contiv/netplugin/utils"
+	"github.com/contiv/netplugin/utils/netutils"
 	"github.com/contiv/objdb"
 	"github.com/contiv/ofnet"
 	"github.com/gorilla/mux"
@@ -40,6 +40,7 @@ const leaderLockTTL = 30
 type daemon struct {
 	listenURL        string                // URL where netmaster needs to listen
 	currState        string                // Current state of the daemon
+	clusterStore     string                // state store URL
 	apiController    *objApi.APIController // API controller for contiv model
 	stateDriver      core.StateDriver      // KV store
 	objdbClient      objdb.API             // Objdb client
@@ -51,9 +52,21 @@ type daemon struct {
 
 var leaderLock objdb.LockInterface // leader lock
 
+// GetLocalAddr gets local address to be used
+func GetLocalAddr() (string, error) {
+	// get the ip address by local hostname
+	localIP, err := netutils.GetMyAddr()
+	if err == nil && netutils.IsAddrLocal(localIP) {
+		return localIP, nil
+	}
+
+	// Return first available address if we could not find by hostname
+	return netutils.GetFirstLocalAddr()
+}
+
 func (d *daemon) registerService() {
 	// Get the address to be used for local communication
-	localIP, err := d.objdbClient.GetLocalAddr()
+	localIP, err := GetLocalAddr()
 	if err != nil {
 		log.Fatalf("Error getting local IP address. Err: %v", err)
 	}
@@ -61,8 +74,24 @@ func (d *daemon) registerService() {
 	// service info
 	srvInfo := objdb.ServiceInfo{
 		ServiceName: "netmaster",
+		TTL:         10,
 		HostAddr:    localIP,
 		Port:        9999,
+		Role:        d.currState,
+	}
+
+	// Register the node with service registry
+	err = d.objdbClient.RegisterService(srvInfo)
+	if err != nil {
+		log.Fatalf("Error registering service. Err: %v", err)
+	}
+
+	// service info
+	srvInfo = objdb.ServiceInfo{
+		ServiceName: "netmaster.rpc",
+		TTL:         10,
+		HostAddr:    localIP,
+		Port:        ofnet.OFNET_MASTER_PORT,
 		Role:        d.currState,
 	}
 
@@ -75,44 +104,35 @@ func (d *daemon) registerService() {
 	log.Infof("Registered netmaster service with registry")
 }
 
-// registerWebuiHandler registers handlers for serving web UI
-func (d *daemon) registerWebuiHandler(router *mux.Router) {
-	// Setup the router to serve the web UI
-	goPath := os.Getenv("GOPATH")
-	if goPath != "" {
-		webPath := goPath + "/src/github.com/contiv/contivmodel/www/"
-
-		// Make sure we have the web UI files
-		_, err := os.Stat(webPath)
-		if err != nil {
-			webPath = goPath + "/src/github.com/contiv/netplugin/" +
-				"Godeps/_workspace/src/github.com/contiv/contivmodel/www/"
-			_, err := os.Stat(webPath)
-			if err != nil {
-				log.Errorf("Can not find the web UI directory")
-			}
-		}
-
-		log.Infof("Using webPath: %s", webPath)
-
-		// serve static files
-		router.PathPrefix("/web/").Handler(http.StripPrefix("/web/", http.FileServer(http.Dir(webPath))))
-
-		// Special case to serve main index.html
-		router.HandleFunc("/", func(rw http.ResponseWriter, req *http.Request) {
-			http.ServeFile(rw, req, webPath+"index.html")
-		})
+// Find all netplugin nodes and register them
+func (d *daemon) registerNetpluginNodes() error {
+	// Get all netplugin services
+	srvList, err := d.objdbClient.GetService("netplugin")
+	if err != nil {
+		log.Errorf("Error getting netplugin nodes. Err: %v", err)
+		return err
 	}
 
-	// proxy Handler
-	router.PathPrefix("/proxy/").HandlerFunc(proxyHandler)
+	// Add each node
+	for _, srv := range srvList {
+		// build host info
+		nodeInfo := ofnet.OfnetNode{
+			HostAddr: srv.HostAddr,
+			HostPort: uint16(srv.Port),
+		}
+
+		// Add the node
+		err = d.ofnetMaster.AddNode(nodeInfo)
+		if err != nil {
+			log.Errorf("Error adding node %v. Err: %v", srv, err)
+		}
+	}
+
+	return nil
 }
 
 // registerRoutes registers HTTP route handlers
 func (d *daemon) registerRoutes(router *mux.Router) {
-	// register web ui handlers
-	d.registerWebuiHandler(router)
-
 	// Add REST routes
 	s := router.Headers("Content-Type", "application/json").Methods("Post").Subrouter()
 
@@ -120,6 +140,7 @@ func (d *daemon) registerRoutes(router *mux.Router) {
 	s.HandleFunc("/plugin/releaseAddress", makeHTTPHandler(master.ReleaseAddressHandler))
 	s.HandleFunc("/plugin/createEndpoint", makeHTTPHandler(master.CreateEndpointHandler))
 	s.HandleFunc("/plugin/deleteEndpoint", makeHTTPHandler(master.DeleteEndpointHandler))
+	s.HandleFunc("/plugin/svcProviderUpdate", makeHTTPHandler(master.ServiceProviderUpdateHandler))
 
 	s = router.Methods("Get").Subrouter()
 	s.HandleFunc(fmt.Sprintf("/%s/%s", master.GetEndpointRESTEndpoint, "{id}"),
@@ -131,9 +152,11 @@ func (d *daemon) registerRoutes(router *mux.Router) {
 	s.HandleFunc(fmt.Sprintf("/%s", master.GetNetworksRESTEndpoint),
 		get(true, d.networks))
 	s.HandleFunc(fmt.Sprintf("/%s", master.GetVersionRESTEndpoint), getVersion)
+	s.HandleFunc(fmt.Sprintf("/%s/%s", master.GetServiceRESTEndpoint, "{id}"),
+		get(false, d.services))
+	s.HandleFunc(fmt.Sprintf("/%s", master.GetServicesRESTEndpoint),
+		get(true, d.services))
 
-	// See if we need to create the default tenant
-	go objApi.CreateDefaultTenant()
 }
 
 // XXX: This function should be returning logical state instead of driver state
@@ -164,7 +187,7 @@ func (d *daemon) endpoints(id string) ([]core.State, error) {
 	return nil, core.Errorf("Unexpected code path. Recieved error during read: %v", err)
 }
 
-// XXX: This function should be returning logical state instead of driver state
+// Returns state of networks
 func (d *daemon) networks(id string) ([]core.State, error) {
 	var (
 		err error
@@ -194,19 +217,24 @@ func (d *daemon) runLeader() {
 	defer d.listenerMutex.Unlock()
 
 	// Create a new api controller
-	d.apiController = objApi.NewAPIController(router)
+	d.apiController = objApi.NewAPIController(router, d.clusterStore)
 
-	// initialize policy manager
-	mastercfg.InitPolicyMgr(d.stateDriver, d.ofnetMaster)
+	//Restore state from clusterStore
+
+	d.restoreCache()
 
 	// Register netmaster service
 	d.registerService()
+
+	// initialize policy manager
+	mastercfg.InitPolicyMgr(d.stateDriver, d.ofnetMaster)
 
 	// setup HTTP routes
 	d.registerRoutes(router)
 
 	// Create HTTP server and listener
 	server := &http.Server{Handler: router}
+	server.SetKeepAlivesEnabled(false)
 	listener, err := net.Listen("tcp", d.listenURL)
 	if nil != err {
 		log.Fatalln(err)
@@ -238,6 +266,7 @@ func (d *daemon) runFollower() {
 
 	// start server
 	server := &http.Server{Handler: router}
+	server.SetKeepAlivesEnabled(false)
 	listener, err := net.Listen("tcp", d.listenURL)
 	if nil != err {
 		log.Fatalln(err)
@@ -286,20 +315,28 @@ func (d *daemon) becomeFollower() {
 
 // runMasterFsm runs netmaster FSM
 func (d *daemon) runMasterFsm() {
+	var err error
+
+	// Get the address to be used for local communication
+	localIP, err := GetLocalAddr()
+	if err != nil {
+		log.Fatalf("Error getting local IP address. Err: %v", err)
+	}
+
 	// create new ofnet master
-	d.ofnetMaster = ofnet.NewOfnetMaster(ofnet.OFNET_MASTER_PORT)
+	d.ofnetMaster = ofnet.NewOfnetMaster(localIP, ofnet.OFNET_MASTER_PORT)
 	if d.ofnetMaster == nil {
 		log.Fatalf("Error creating ofnet master")
 	}
 
 	// Create an objdb client
-	d.objdbClient = objdb.NewClient("")
-
-	// Get the address to be used for local communication
-	localIP, err := d.objdbClient.GetLocalAddr()
+	d.objdbClient, err = objdb.NewClient(d.clusterStore)
 	if err != nil {
-		log.Fatalf("Error getting local IP address. Err: %v", err)
+		log.Fatalf("Error connecting to state store: %v. Err: %v", d.clusterStore, err)
 	}
+
+	// Register all existing netplugins in the background
+	go d.registerNetpluginNodes()
 
 	// Create the lock
 	leaderLock, err = d.objdbClient.NewLock("netmaster/leader", localIP, leaderLockTTL)
@@ -340,4 +377,32 @@ func (d *daemon) runMasterFsm() {
 			}
 		}
 	}
+}
+
+func (d *daemon) restoreCache() {
+
+	//Restore ServiceLBDb and ProviderDb
+	master.RestoreServiceProviderLBDb()
+
+}
+
+// services: This function should be returning logical state instead of driver state
+func (d *daemon) services(id string) ([]core.State, error) {
+	var (
+		err error
+		svc *mastercfg.CfgServiceLBState
+	)
+
+	svc = &mastercfg.CfgServiceLBState{}
+	if svc.StateDriver, err = utils.GetStateDriver(); err != nil {
+		return nil, err
+	}
+
+	if id == "all" {
+		return svc.ReadAll()
+	} else if err := svc.Read(id); err == nil {
+		return []core.State{core.State(svc)}, nil
+	}
+
+	return nil, err
 }

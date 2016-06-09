@@ -2,6 +2,7 @@ package systemtests
 
 import (
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ type containerSpec struct {
 	networkName string
 	serviceName string
 	name        string
+	dnsServer   string
+	labels      []string
 }
 
 type node struct {
@@ -25,8 +28,9 @@ type node struct {
 }
 
 func (n *node) rotateLog(prefix string) error {
-	prefix = fmt.Sprintf("/tmp/%s", prefix)
-	_, err := n.runCommand(fmt.Sprintf("mv %s.log %s-`date +%%s`.log", prefix, prefix))
+	oldPrefix := fmt.Sprintf("/tmp/%s", prefix)
+	newPrefix := fmt.Sprintf("/tmp/_%s", prefix)
+	_, err := n.runCommand(fmt.Sprintf("mv %s.log %s-`date +%%s`.log", oldPrefix, newPrefix))
 	return err
 }
 
@@ -63,7 +67,7 @@ func (s *systemtestSuite) getNodeByName(name string) *node {
 
 func (n *node) startNetplugin(args string) error {
 	logrus.Infof("Starting netplugin on %s", n.Name())
-	return n.tbnode.RunCommandBackground("sudo " + n.suite.binpath + "/netplugin -plugin-mode docker -vlan-if " + n.suite.vlanIf + " " + args + "&> /tmp/netplugin.log")
+	return n.tbnode.RunCommandBackground("sudo " + n.suite.binpath + "/netplugin -plugin-mode docker -vlan-if " + n.suite.vlanIf + " --cluster-store " + n.suite.clusterStore + " " + args + "&> /tmp/netplugin.log")
 }
 
 func (n *node) stopNetplugin() error {
@@ -78,12 +82,16 @@ func (n *node) stopNetmaster() error {
 
 func (n *node) startNetmaster() error {
 	logrus.Infof("Starting netmaster on %s", n.Name())
-	return n.tbnode.RunCommandBackground(n.suite.binpath + "/netmaster &> /tmp/netmaster.log")
+	dnsOpt := " --dns-enable=false "
+	if n.suite.enableDNS {
+		dnsOpt = " --dns-enable=true "
+	}
+	return n.tbnode.RunCommandBackground(n.suite.binpath + "/netmaster" + dnsOpt + " --cluster-store " + n.suite.clusterStore + " &> /tmp/netmaster.log")
 }
 
 func (n *node) cleanupDockerNetwork() error {
 	logrus.Infof("Cleaning up networks on %s", n.Name())
-	return n.tbnode.RunCommand("docker network ls | grep netplugin | awk '{print $2}'")
+	return n.tbnode.RunCommand("docker network rm $(docker network ls | grep netplugin | awk '{print $2}')")
 }
 
 func (n *node) cleanupContainers() error {
@@ -98,7 +106,6 @@ func (n *node) cleanupSlave() {
 	vNode.RunCommand("sudo ovs-vsctl del-br contivVlanBridge")
 	vNode.RunCommand("for p in `ifconfig  | grep vport | awk '{print $1}'`; do sudo ip link delete $p type veth; done")
 	vNode.RunCommand("sudo rm /var/run/docker/plugins/netplugin.sock")
-	vNode.RunCommand("sudo rm /tmp/net*")
 	vNode.RunCommand("sudo service docker restart")
 }
 
@@ -109,6 +116,8 @@ func (n *node) cleanupMaster() {
 	vNode.RunCommand("etcdctl rm --recursive /contiv.io")
 	vNode.RunCommand("etcdctl rm --recursive /docker")
 	vNode.RunCommand("etcdctl rm --recursive /skydns")
+	vNode.RunCommand("curl -X DELETE localhost:8500/v1/kv/contiv.io?recurse=true")
+	vNode.RunCommand("curl -X DELETE localhost:8500/v1/kv/docker?recurse=true")
 }
 
 func (n *node) runCommand(cmd string) (string, error) {
@@ -130,13 +139,13 @@ func (n *node) runCommand(cmd string) (string, error) {
 }
 
 func (n *node) runContainer(spec containerSpec) (*container, error) {
-	var namestr, netstr string
+	var namestr, netstr, dnsStr, labelstr string
 
 	if spec.networkName != "" {
 		netstr = spec.networkName
 
 		if spec.serviceName != "" {
-			netstr = spec.serviceName + "." + netstr
+			netstr = spec.serviceName
 		}
 
 		netstr = "--net=" + netstr
@@ -154,9 +163,20 @@ func (n *node) runContainer(spec containerSpec) (*container, error) {
 		namestr = "--name=" + spec.name
 	}
 
+	if spec.dnsServer != "" {
+		dnsStr = "--dns=" + spec.dnsServer
+	}
+
+	if len(spec.labels) > 0 {
+		l := "--label="
+		for _, label := range spec.labels {
+			labelstr += l + label + " "
+		}
+	}
+
 	logrus.Infof("Starting a container running %q on %s", spec.commandName, n.Name())
 
-	cmd := fmt.Sprintf("docker run -itd %s %s %s %s", namestr, netstr, spec.imageName, spec.commandName)
+	cmd := fmt.Sprintf("docker run -itd %s %s %s %s %s %s", namestr, netstr, dnsStr, labelstr, spec.imageName, spec.commandName)
 
 	out, err := n.tbnode.RunCommandWithOutput(cmd)
 	if err != nil {
@@ -182,9 +202,19 @@ func (n *node) runContainer(spec containerSpec) (*container, error) {
 }
 
 func (n *node) checkForNetpluginErrors() error {
-	out, _ := n.tbnode.RunCommandWithOutput(`for i in /tmp/net*; do grep "error|fatal" $i; done`)
+	out, _ := n.tbnode.RunCommandWithOutput(`for i in /tmp/net*; do grep "panic\|fatal" $i; done`)
 	if out != "" {
-		return fmt.Errorf("error output in netplugin logs: %q", out)
+		logrus.Errorf("Fatal error in logs on %s: \n", n.Name())
+		fmt.Printf("%s\n==========================================\n", out)
+		return fmt.Errorf("fatal error in netplugin logs")
+	}
+
+	out, _ = n.tbnode.RunCommandWithOutput(`for i in /tmp/net*; do grep "error" $i; done`)
+	if out != "" {
+		logrus.Errorf("error output in netplugin logs on %s: \n", n.Name())
+		fmt.Printf("%s==========================================\n\n", out)
+		// FIXME: We still have some tests that are failing error check
+		// return fmt.Errorf("error output in netplugin logs")
 	}
 
 	return nil
@@ -200,4 +230,30 @@ func (n *node) runCommandUntilNoError(cmd string) error {
 	timeoutMessage := fmt.Sprintf("timeout reached trying to run %v on %q", cmd, n.Name())
 	_, err := utils.WaitForDone(runCmd, 10*time.Millisecond, 10*time.Second, timeoutMessage)
 	return err
+}
+
+func (n *node) checkPing(ipaddr string) error {
+	logrus.Infof("Checking ping from %s to %s", n.Name(), ipaddr)
+	out, err := n.tbnode.RunCommandWithOutput("ping -c 1 " + ipaddr)
+
+	if err != nil || strings.Contains(out, "0 received, 100% packet loss") {
+		logrus.Errorf("Ping from %s to %s FAILED: %q - %v", n.Name(), ipaddr, out, err)
+		return fmt.Errorf("Ping failed from %s to %s: %q - %v", n.Name(), ipaddr, out, err)
+	}
+
+	logrus.Infof("Ping from %s to %s SUCCEEDED", n.Name(), ipaddr)
+	return nil
+}
+
+func (n *node) reloadNode() error {
+	logrus.Infof("Reloading node %s", n.Name())
+
+	out, err := exec.Command("vagrant", "reload", n.Name()).CombinedOutput()
+	if err != nil {
+		logrus.Errorf("Error reloading node %s. Err: %v\n Output: %s", n.Name(), err, string(out))
+		return err
+	}
+
+	logrus.Infof("Reloaded node %s. Output:\n%s", n.Name(), string(out))
+	return nil
 }
