@@ -21,7 +21,8 @@ type AppProfile struct {
 
 	AppProfileName string   `json:"appProfileName,omitempty"` // Application Profile Name
 	EndpointGroups []string `json:"endpointGroups,omitempty"`
-	TenantName     string   `json:"tenantName,omitempty"` // Tenant Name
+	NetworkName    string   `json:"networkName,omitempty"` // Network of App Prof
+	TenantName     string   `json:"tenantName,omitempty"`  // Tenant Name
 
 	// add link-sets and links
 	LinkSets AppProfileLinkSets `json:"link-sets,omitempty"`
@@ -33,7 +34,45 @@ type AppProfileLinkSets struct {
 }
 
 type AppProfileLinks struct {
-	Tenant modeldb.Link `json:"Tenant,omitempty"`
+	Network modeldb.Link `json:"Network,omitempty"`
+	Tenant  modeldb.Link `json:"Tenant,omitempty"`
+}
+
+type EndpointGroup struct {
+	// every object has a key
+	Key string `json:"key,omitempty"`
+
+	EndpointGroupID int      `json:"endpointGroupId,omitempty"` // Group Identifier
+	GroupName       string   `json:"groupName,omitempty"`       // Group name
+	NetworkName     string   `json:"networkName,omitempty"`     // Network
+	Policies        []string `json:"policies,omitempty"`
+	TenantName      string   `json:"tenantName,omitempty"` // Tenant
+
+	// add link-sets and links
+	LinkSets EndpointGroupLinkSets `json:"link-sets,omitempty"`
+	Links    EndpointGroupLinks    `json:"links,omitempty"`
+}
+
+type EndpointGroupLinkSets struct {
+	Policies map[string]modeldb.Link `json:"Policies,omitempty"`
+	Services map[string]modeldb.Link `json:"Services,omitempty"`
+}
+
+type EndpointGroupLinks struct {
+	AppProfile modeldb.Link `json:"AppProfile,omitempty"`
+	Network    modeldb.Link `json:"Network,omitempty"`
+	Tenant     modeldb.Link `json:"Tenant,omitempty"`
+}
+
+type Global struct {
+	// every object has a key
+	Key string `json:"key,omitempty"`
+
+	Name             string `json:"name,omitempty"`               // name of this block
+	NetworkInfraType string `json:"network-infra-type,omitempty"` // Network infrastructure type
+	Vlans            string `json:"vlans,omitempty"`              // Allowed vlan range
+	Vxlans           string `json:"vxlans,omitempty"`             // Allwed vxlan range
+
 }
 
 type Bgp struct {
@@ -48,71 +87,13 @@ type Bgp struct {
 
 }
 
-type EndpointGroup struct {
-	// every object has a key
-	Key string `json:"key,omitempty"`
-
-	ExtContractsGrps []string `json:"extContractsGrps,omitempty"`
-	GroupName        string   `json:"groupName,omitempty"`   // Group name
-	NetworkName      string   `json:"networkName,omitempty"` // Network
-	Policies         []string `json:"policies,omitempty"`
-	TenantName       string   `json:"tenantName,omitempty"` // Tenant
-
-	// add link-sets and links
-	LinkSets EndpointGroupLinkSets `json:"link-sets,omitempty"`
-	Links    EndpointGroupLinks    `json:"links,omitempty"`
-}
-
-type EndpointGroupLinkSets struct {
-	ExtContractsGrps map[string]modeldb.Link `json:"ExtContractsGrps,omitempty"`
-	Policies         map[string]modeldb.Link `json:"Policies,omitempty"`
-	Services         map[string]modeldb.Link `json:"Services,omitempty"`
-}
-
-type EndpointGroupLinks struct {
-	AppProfile modeldb.Link `json:"AppProfile,omitempty"`
-	Network    modeldb.Link `json:"Network,omitempty"`
-	Tenant     modeldb.Link `json:"Tenant,omitempty"`
-}
-
-type ExtContractsGroup struct {
-	// every object has a key
-	Key string `json:"key,omitempty"`
-
-	Contracts          []string `json:"contracts,omitempty"`
-	ContractsGroupName string   `json:"contractsGroupName,omitempty"` // Contracts group name
-	ContractsType      string   `json:"contractsType,omitempty"`      // Contracts type
-	TenantName         string   `json:"tenantName,omitempty"`         // Tenant name
-
-	// add link-sets and links
-	LinkSets ExtContractsGroupLinkSets `json:"link-sets,omitempty"`
-}
-
-type ExtContractsGroupLinkSets struct {
-	EndpointGroups map[string]modeldb.Link `json:"EndpointGroups,omitempty"`
-}
-
-type Global struct {
-	// every object has a key
-	Key string `json:"key,omitempty"`
-
-	Name             string `json:"name,omitempty"`             // name of this block(must be 'global')
-	NetworkInfraType string `json:"networkInfraType,omitempty"` // Network infrastructure type
-	Vlans            string `json:"vlans,omitempty"`            // Allowed vlan range
-	Vxlans           string `json:"vxlans,omitempty"`           // Allwed vxlan range
-
-}
-
 type Network struct {
 	// every object has a key
 	Key string `json:"key,omitempty"`
 
 	Encap       string `json:"encap,omitempty"`       // Encapsulation
 	Gateway     string `json:"gateway,omitempty"`     // Gateway
-	Ipv6Gateway string `json:"ipv6Gateway,omitempty"` // IPv6Gateway
-	Ipv6Subnet  string `json:"ipv6Subnet,omitempty"`  // IPv6Subnet
 	NetworkName string `json:"networkName,omitempty"` // Network name
-	NwType      string `json:"nwType,omitempty"`      // Network Type
 	PktTag      int    `json:"pktTag,omitempty"`      // Vlan/Vxlan Tag
 	Subnet      string `json:"subnet,omitempty"`      // Subnet
 	TenantName  string `json:"tenantName,omitempty"`  // Tenant Name
@@ -123,8 +104,8 @@ type Network struct {
 }
 
 type NetworkLinkSets struct {
+	AppProfiles    map[string]modeldb.Link `json:"AppProfiles,omitempty"`
 	EndpointGroups map[string]modeldb.Link `json:"EndpointGroups,omitempty"`
-	Servicelbs     map[string]modeldb.Link `json:"Servicelbs,omitempty"`
 	Services       map[string]modeldb.Link `json:"Services,omitempty"`
 }
 
@@ -182,23 +163,60 @@ type RuleLinkSets struct {
 	Policies map[string]modeldb.Link `json:"Policies,omitempty"`
 }
 
-type ServiceLB struct {
+type Service struct {
 	// every object has a key
 	Key string `json:"key,omitempty"`
 
-	IpAddress   string   `json:"ipAddress,omitempty"`   // Service ip
-	NetworkName string   `json:"networkName,omitempty"` // Service network name
-	Ports       []string `json:"ports,omitempty"`
-	Selectors   []string `json:"selectors,omitempty"`
-	ServiceName string   `json:"serviceName,omitempty"` // service name
-	TenantName  string   `json:"tenantName,omitempty"`  // Tenant Name
+	AppName        string   `json:"appName,omitempty"` // Application Name
+	Command        string   `json:"command,omitempty"` //
+	Cpu            string   `json:"cpu,omitempty"`     //
+	EndpointGroups []string `json:"endpointGroups,omitempty"`
+	Environment    []string `json:"environment,omitempty"`
+	ImageName      string   `json:"imageName,omitempty"` //
+	Memory         string   `json:"memory,omitempty"`    //
+	Networks       []string `json:"networks,omitempty"`
+	Scale          int      `json:"scale,omitempty"`         //
+	ServiceName    string   `json:"serviceName,omitempty"`   // Service Name
+	TenantName     string   `json:"tenantName,omitempty"`    // Tenant Name
+	VolumeProfile  string   `json:"volumeProfile,omitempty"` //
 
-	Links ServiceLBLinks `json:"links,omitempty"`
+	// add link-sets and links
+	LinkSets ServiceLinkSets `json:"link-sets,omitempty"`
+	Links    ServiceLinks    `json:"links,omitempty"`
 }
 
-type ServiceLBLinks struct {
-	Network modeldb.Link `json:"Network,omitempty"`
-	Tenant  modeldb.Link `json:"Tenant,omitempty"`
+type ServiceLinkSets struct {
+	EndpointGroups map[string]modeldb.Link `json:"EndpointGroups,omitempty"`
+	Instances      map[string]modeldb.Link `json:"Instances,omitempty"`
+	Networks       map[string]modeldb.Link `json:"Networks,omitempty"`
+}
+
+type ServiceLinks struct {
+	App           modeldb.Link `json:"App,omitempty"`
+	VolumeProfile modeldb.Link `json:"VolumeProfile,omitempty"`
+}
+
+type ServiceInstance struct {
+	// every object has a key
+	Key string `json:"key,omitempty"`
+
+	AppName     string   `json:"appName,omitempty"`     //
+	InstanceID  string   `json:"instanceId,omitempty"`  // Service instance id
+	ServiceName string   `json:"serviceName,omitempty"` //
+	TenantName  string   `json:"tenantName,omitempty"`  // Tenant Name
+	Volumes     []string `json:"volumes,omitempty"`
+
+	// add link-sets and links
+	LinkSets ServiceInstanceLinkSets `json:"link-sets,omitempty"`
+	Links    ServiceInstanceLinks    `json:"links,omitempty"`
+}
+
+type ServiceInstanceLinkSets struct {
+	Volumes map[string]modeldb.Link `json:"Volumes,omitempty"`
+}
+
+type ServiceInstanceLinks struct {
+	Service modeldb.Link `json:"Service,omitempty"`
 }
 
 type Tenant struct {
@@ -217,7 +235,6 @@ type TenantLinkSets struct {
 	EndpointGroups map[string]modeldb.Link `json:"EndpointGroups,omitempty"`
 	Networks       map[string]modeldb.Link `json:"Networks,omitempty"`
 	Policies       map[string]modeldb.Link `json:"Policies,omitempty"`
-	Servicelbs     map[string]modeldb.Link `json:"Servicelbs,omitempty"`
 	VolumeProfiles map[string]modeldb.Link `json:"VolumeProfiles,omitempty"`
 	Volumes        map[string]modeldb.Link `json:"Volumes,omitempty"`
 }
@@ -271,18 +288,18 @@ type VolumeProfileLinks struct {
 }
 
 type Collections struct {
-	appProfiles        map[string]*AppProfile
-	Bgps               map[string]*Bgp
-	endpointGroups     map[string]*EndpointGroup
-	extContractsGroups map[string]*ExtContractsGroup
-	globals            map[string]*Global
-	networks           map[string]*Network
-	policys            map[string]*Policy
-	rules              map[string]*Rule
-	serviceLBs         map[string]*ServiceLB
-	tenants            map[string]*Tenant
-	volumes            map[string]*Volume
-	volumeProfiles     map[string]*VolumeProfile
+	appProfiles      map[string]*AppProfile
+	endpointGroups   map[string]*EndpointGroup
+	globals          map[string]*Global
+	Bgps             map[string]*Bgp
+	networks         map[string]*Network
+	policys          map[string]*Policy
+	rules            map[string]*Rule
+	services         map[string]*Service
+	serviceInstances map[string]*ServiceInstance
+	tenants          map[string]*Tenant
+	volumes          map[string]*Volume
+	volumeProfiles   map[string]*VolumeProfile
 }
 
 var collections Collections
@@ -293,28 +310,22 @@ type AppProfileCallbacks interface {
 	AppProfileDelete(appProfile *AppProfile) error
 }
 
-type BgpCallbacks interface {
-	BgpCreate(Bgp *Bgp) error
-	BgpUpdate(Bgp, params *Bgp) error
-	BgpDelete(Bgp *Bgp) error
-}
-
 type EndpointGroupCallbacks interface {
 	EndpointGroupCreate(endpointGroup *EndpointGroup) error
 	EndpointGroupUpdate(endpointGroup, params *EndpointGroup) error
 	EndpointGroupDelete(endpointGroup *EndpointGroup) error
 }
 
-type ExtContractsGroupCallbacks interface {
-	ExtContractsGroupCreate(extContractsGroup *ExtContractsGroup) error
-	ExtContractsGroupUpdate(extContractsGroup, params *ExtContractsGroup) error
-	ExtContractsGroupDelete(extContractsGroup *ExtContractsGroup) error
-}
-
 type GlobalCallbacks interface {
 	GlobalCreate(global *Global) error
 	GlobalUpdate(global, params *Global) error
 	GlobalDelete(global *Global) error
+}
+
+type BgpCallbacks interface {
+	BgpCreate(Bgp *Bgp) error
+	BgpUpdate(Bgp, params *Bgp) error
+	BgpDelete(Bgp *Bgp) error
 }
 
 type NetworkCallbacks interface {
@@ -335,10 +346,16 @@ type RuleCallbacks interface {
 	RuleDelete(rule *Rule) error
 }
 
-type ServiceLBCallbacks interface {
-	ServiceLBCreate(serviceLB *ServiceLB) error
-	ServiceLBUpdate(serviceLB, params *ServiceLB) error
-	ServiceLBDelete(serviceLB *ServiceLB) error
+type ServiceCallbacks interface {
+	ServiceCreate(service *Service) error
+	ServiceUpdate(service, params *Service) error
+	ServiceDelete(service *Service) error
+}
+
+type ServiceInstanceCallbacks interface {
+	ServiceInstanceCreate(serviceInstance *ServiceInstance) error
+	ServiceInstanceUpdate(serviceInstance, params *ServiceInstance) error
+	ServiceInstanceDelete(serviceInstance *ServiceInstance) error
 }
 
 type TenantCallbacks interface {
@@ -360,45 +377,45 @@ type VolumeProfileCallbacks interface {
 }
 
 type CallbackHandlers struct {
-	AppProfileCb        AppProfileCallbacks
-	BgpCb               BgpCallbacks
-	EndpointGroupCb     EndpointGroupCallbacks
-	ExtContractsGroupCb ExtContractsGroupCallbacks
-	GlobalCb            GlobalCallbacks
-	NetworkCb           NetworkCallbacks
-	PolicyCb            PolicyCallbacks
-	RuleCb              RuleCallbacks
-	ServiceLBCb         ServiceLBCallbacks
-	TenantCb            TenantCallbacks
-	VolumeCb            VolumeCallbacks
-	VolumeProfileCb     VolumeProfileCallbacks
+	AppProfileCb      AppProfileCallbacks
+	EndpointGroupCb   EndpointGroupCallbacks
+	GlobalCb          GlobalCallbacks
+	BgpCb             BgpCallbacks
+	NetworkCb         NetworkCallbacks
+	PolicyCb          PolicyCallbacks
+	RuleCb            RuleCallbacks
+	ServiceCb         ServiceCallbacks
+	ServiceInstanceCb ServiceInstanceCallbacks
+	TenantCb          TenantCallbacks
+	VolumeCb          VolumeCallbacks
+	VolumeProfileCb   VolumeProfileCallbacks
 }
 
 var objCallbackHandler CallbackHandlers
 
 func Init() {
 	collections.appProfiles = make(map[string]*AppProfile)
-	collections.Bgps = make(map[string]*Bgp)
 	collections.endpointGroups = make(map[string]*EndpointGroup)
-	collections.extContractsGroups = make(map[string]*ExtContractsGroup)
 	collections.globals = make(map[string]*Global)
+	collections.Bgps = make(map[string]*Bgp)
 	collections.networks = make(map[string]*Network)
 	collections.policys = make(map[string]*Policy)
 	collections.rules = make(map[string]*Rule)
-	collections.serviceLBs = make(map[string]*ServiceLB)
+	collections.services = make(map[string]*Service)
+	collections.serviceInstances = make(map[string]*ServiceInstance)
 	collections.tenants = make(map[string]*Tenant)
 	collections.volumes = make(map[string]*Volume)
 	collections.volumeProfiles = make(map[string]*VolumeProfile)
 
 	restoreAppProfile()
-	restoreBgp()
 	restoreEndpointGroup()
-	restoreExtContractsGroup()
 	restoreGlobal()
+	restoreBgp()
 	restoreNetwork()
 	restorePolicy()
 	restoreRule()
-	restoreServiceLB()
+	restoreService()
+	restoreServiceInstance()
 	restoreTenant()
 	restoreVolume()
 	restoreVolumeProfile()
@@ -409,20 +426,16 @@ func RegisterAppProfileCallbacks(handler AppProfileCallbacks) {
 	objCallbackHandler.AppProfileCb = handler
 }
 
-func RegisterBgpCallbacks(handler BgpCallbacks) {
-	objCallbackHandler.BgpCb = handler
-}
-
 func RegisterEndpointGroupCallbacks(handler EndpointGroupCallbacks) {
 	objCallbackHandler.EndpointGroupCb = handler
 }
 
-func RegisterExtContractsGroupCallbacks(handler ExtContractsGroupCallbacks) {
-	objCallbackHandler.ExtContractsGroupCb = handler
-}
-
 func RegisterGlobalCallbacks(handler GlobalCallbacks) {
 	objCallbackHandler.GlobalCb = handler
+}
+
+func RegisterBgpCallbacks(handler BgpCallbacks) {
+	objCallbackHandler.BgpCb = handler
 }
 
 func RegisterNetworkCallbacks(handler NetworkCallbacks) {
@@ -437,8 +450,12 @@ func RegisterRuleCallbacks(handler RuleCallbacks) {
 	objCallbackHandler.RuleCb = handler
 }
 
-func RegisterServiceLBCallbacks(handler ServiceLBCallbacks) {
-	objCallbackHandler.ServiceLBCb = handler
+func RegisterServiceCallbacks(handler ServiceCallbacks) {
+	objCallbackHandler.ServiceCb = handler
+}
+
+func RegisterServiceInstanceCallbacks(handler ServiceInstanceCallbacks) {
+	objCallbackHandler.ServiceInstanceCb = handler
 }
 
 func RegisterTenantCallbacks(handler TenantCallbacks) {
@@ -502,16 +519,6 @@ func AddRoutes(router *mux.Router) {
 	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateAppProfile))
 	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteAppProfile))
 
-	// Register Bgp
-	route = "/api/Bgps/{key}/"
-	listRoute = "/api/Bgps/"
-	log.Infof("Registering %s", route)
-	router.Path(listRoute).Methods("GET").HandlerFunc(makeHttpHandler(httpListBgps))
-	router.Path(route).Methods("GET").HandlerFunc(makeHttpHandler(httpGetBgp))
-	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateBgp))
-	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateBgp))
-	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteBgp))
-
 	// Register endpointGroup
 	route = "/api/endpointGroups/{key}/"
 	listRoute = "/api/endpointGroups/"
@@ -522,16 +529,6 @@ func AddRoutes(router *mux.Router) {
 	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateEndpointGroup))
 	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteEndpointGroup))
 
-	// Register extContractsGroup
-	route = "/api/extContractsGroups/{key}/"
-	listRoute = "/api/extContractsGroups/"
-	log.Infof("Registering %s", route)
-	router.Path(listRoute).Methods("GET").HandlerFunc(makeHttpHandler(httpListExtContractsGroups))
-	router.Path(route).Methods("GET").HandlerFunc(makeHttpHandler(httpGetExtContractsGroup))
-	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateExtContractsGroup))
-	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateExtContractsGroup))
-	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteExtContractsGroup))
-
 	// Register global
 	route = "/api/globals/{key}/"
 	listRoute = "/api/globals/"
@@ -541,6 +538,16 @@ func AddRoutes(router *mux.Router) {
 	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateGlobal))
 	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateGlobal))
 	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteGlobal))
+
+	// Register Bgp
+	route = "/api/Bgps/{key}/"
+	listRoute = "/api/Bgps/"
+	log.Infof("Registering %s", route)
+	router.Path(listRoute).Methods("GET").HandlerFunc(makeHttpHandler(httpListBgps))
+	router.Path(route).Methods("GET").HandlerFunc(makeHttpHandler(httpGetBgp))
+	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateBgp))
+	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateBgp))
+	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteBgp))
 
 	// Register network
 	route = "/api/networks/{key}/"
@@ -572,15 +579,25 @@ func AddRoutes(router *mux.Router) {
 	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateRule))
 	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteRule))
 
-	// Register serviceLB
-	route = "/api/serviceLBs/{key}/"
-	listRoute = "/api/serviceLBs/"
+	// Register service
+	route = "/api/services/{key}/"
+	listRoute = "/api/services/"
 	log.Infof("Registering %s", route)
-	router.Path(listRoute).Methods("GET").HandlerFunc(makeHttpHandler(httpListServiceLBs))
-	router.Path(route).Methods("GET").HandlerFunc(makeHttpHandler(httpGetServiceLB))
-	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateServiceLB))
-	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateServiceLB))
-	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteServiceLB))
+	router.Path(listRoute).Methods("GET").HandlerFunc(makeHttpHandler(httpListServices))
+	router.Path(route).Methods("GET").HandlerFunc(makeHttpHandler(httpGetService))
+	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateService))
+	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateService))
+	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteService))
+
+	// Register serviceInstance
+	route = "/api/serviceInstances/{key}/"
+	listRoute = "/api/serviceInstances/"
+	log.Infof("Registering %s", route)
+	router.Path(listRoute).Methods("GET").HandlerFunc(makeHttpHandler(httpListServiceInstances))
+	router.Path(route).Methods("GET").HandlerFunc(makeHttpHandler(httpGetServiceInstance))
+	router.Path(route).Methods("POST").HandlerFunc(makeHttpHandler(httpCreateServiceInstance))
+	router.Path(route).Methods("PUT").HandlerFunc(makeHttpHandler(httpCreateServiceInstance))
+	router.Path(route).Methods("DELETE").HandlerFunc(makeHttpHandler(httpDeleteServiceInstance))
 
 	// Register tenant
 	route = "/api/tenants/{key}/"
@@ -842,7 +859,7 @@ func restoreAppProfile() error {
 // Validate a appProfile object
 func ValidateAppProfile(obj *AppProfile) error {
 	// Validate key is correct
-	keyStr := obj.TenantName + ":" + obj.AppProfileName
+	keyStr := obj.TenantName + ":" + obj.NetworkName + ":" + obj.AppProfileName
 	if obj.Key != keyStr {
 		log.Errorf("Expecting AppProfile Key: %s. Got: %s", keyStr, obj.Key)
 		return errors.New("Invalid Key")
@@ -850,22 +867,500 @@ func ValidateAppProfile(obj *AppProfile) error {
 
 	// Validate each field
 
-	if len(obj.AppProfileName) > 64 {
-		return errors.New("appProfileName string too long")
+	return nil
+}
+
+// LIST REST call
+func httpListEndpointGroups(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpListEndpointGroups: %+v", vars)
+
+	list := make([]*EndpointGroup, 0)
+	for _, obj := range collections.endpointGroups {
+		list = append(list, obj)
 	}
 
-	appProfileNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if appProfileNameMatch.MatchString(obj.AppProfileName) == false {
-		return errors.New("appProfileName string invalid format")
+	// Return the list
+	return list, nil
+}
+
+// GET REST call
+func httpGetEndpointGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetEndpointGroup: %+v", vars)
+
+	key := vars["key"]
+
+	obj := collections.endpointGroups[key]
+	if obj == nil {
+		log.Errorf("endpointGroup %s not found", key)
+		return nil, errors.New("endpointGroup not found")
 	}
 
-	if len(obj.TenantName) > 64 {
-		return errors.New("tenantName string too long")
+	// Return the obj
+	return obj, nil
+}
+
+// CREATE REST call
+func httpCreateEndpointGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetEndpointGroup: %+v", vars)
+
+	var obj EndpointGroup
+	key := vars["key"]
+
+	// Get object from the request
+	err := json.NewDecoder(r.Body).Decode(&obj)
+	if err != nil {
+		log.Errorf("Error decoding endpointGroup create request. Err %v", err)
+		return nil, err
 	}
 
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
+	// set the key
+	obj.Key = key
+
+	// Create the object
+	err = CreateEndpointGroup(&obj)
+	if err != nil {
+		log.Errorf("CreateEndpointGroup error for: %+v. Err: %v", obj, err)
+		return nil, err
+	}
+
+	// Return the obj
+	return obj, nil
+}
+
+// DELETE rest call
+func httpDeleteEndpointGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpDeleteEndpointGroup: %+v", vars)
+
+	key := vars["key"]
+
+	// Delete the object
+	err := DeleteEndpointGroup(key)
+	if err != nil {
+		log.Errorf("DeleteEndpointGroup error for: %s. Err: %v", key, err)
+		return nil, err
+	}
+
+	// Return the obj
+	return key, nil
+}
+
+// Create a endpointGroup object
+func CreateEndpointGroup(obj *EndpointGroup) error {
+	// Validate parameters
+	err := ValidateEndpointGroup(obj)
+	if err != nil {
+		log.Errorf("ValidateEndpointGroup retruned error for: %+v. Err: %v", obj, err)
+		return err
+	}
+
+	// Check if we handle this object
+	if objCallbackHandler.EndpointGroupCb == nil {
+		log.Errorf("No callback registered for endpointGroup object")
+		return errors.New("Invalid object type")
+	}
+
+	saveObj := obj
+
+	// Check if object already exists
+	if collections.endpointGroups[obj.Key] != nil {
+		// Perform Update callback
+		err = objCallbackHandler.EndpointGroupCb.EndpointGroupUpdate(collections.endpointGroups[obj.Key], obj)
+		if err != nil {
+			log.Errorf("EndpointGroupUpdate retruned error for: %+v. Err: %v", obj, err)
+			return err
+		}
+
+		// save the original object after update
+		saveObj = collections.endpointGroups[obj.Key]
+	} else {
+		// save it in cache
+		collections.endpointGroups[obj.Key] = obj
+
+		// Perform Create callback
+		err = objCallbackHandler.EndpointGroupCb.EndpointGroupCreate(obj)
+		if err != nil {
+			log.Errorf("EndpointGroupCreate retruned error for: %+v. Err: %v", obj, err)
+			delete(collections.endpointGroups, obj.Key)
+			return err
+		}
+	}
+
+	// Write it to modeldb
+	err = saveObj.Write()
+	if err != nil {
+		log.Errorf("Error saving endpointGroup %s to db. Err: %v", saveObj.Key, err)
+		return err
+	}
+
+	return nil
+}
+
+// Return a pointer to endpointGroup from collection
+func FindEndpointGroup(key string) *EndpointGroup {
+	obj := collections.endpointGroups[key]
+	if obj == nil {
+		return nil
+	}
+
+	return obj
+}
+
+// Delete a endpointGroup object
+func DeleteEndpointGroup(key string) error {
+	obj := collections.endpointGroups[key]
+	if obj == nil {
+		log.Errorf("endpointGroup %s not found", key)
+		return errors.New("endpointGroup not found")
+	}
+
+	// Check if we handle this object
+	if objCallbackHandler.EndpointGroupCb == nil {
+		log.Errorf("No callback registered for endpointGroup object")
+		return errors.New("Invalid object type")
+	}
+
+	// Perform callback
+	err := objCallbackHandler.EndpointGroupCb.EndpointGroupDelete(obj)
+	if err != nil {
+		log.Errorf("EndpointGroupDelete retruned error for: %+v. Err: %v", obj, err)
+		return err
+	}
+
+	// delete it from modeldb
+	err = obj.Delete()
+	if err != nil {
+		log.Errorf("Error deleting endpointGroup %s. Err: %v", obj.Key, err)
+	}
+
+	// delete it from cache
+	delete(collections.endpointGroups, key)
+
+	return nil
+}
+
+func (self *EndpointGroup) GetType() string {
+	return "endpointGroup"
+}
+
+func (self *EndpointGroup) GetKey() string {
+	return self.Key
+}
+
+func (self *EndpointGroup) Read() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to read endpointGroup object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.ReadObj("endpointGroup", self.Key, self)
+}
+
+func (self *EndpointGroup) Write() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Write endpointGroup object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.WriteObj("endpointGroup", self.Key, self)
+}
+
+func (self *EndpointGroup) Delete() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Delete endpointGroup object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.DeleteObj("endpointGroup", self.Key)
+}
+
+func restoreEndpointGroup() error {
+	strList, err := modeldb.ReadAllObj("endpointGroup")
+	if err != nil {
+		log.Errorf("Error reading endpointGroup list. Err: %v", err)
+	}
+
+	for _, objStr := range strList {
+		// Parse the json model
+		var endpointGroup EndpointGroup
+		err = json.Unmarshal([]byte(objStr), &endpointGroup)
+		if err != nil {
+			log.Errorf("Error parsing object %s, Err %v", objStr, err)
+			return err
+		}
+
+		// add it to the collection
+		collections.endpointGroups[endpointGroup.Key] = &endpointGroup
+	}
+
+	return nil
+}
+
+// Validate a endpointGroup object
+func ValidateEndpointGroup(obj *EndpointGroup) error {
+	// Validate key is correct
+	keyStr := obj.TenantName + ":" + obj.NetworkName + ":" + obj.GroupName
+	if obj.Key != keyStr {
+		log.Errorf("Expecting EndpointGroup Key: %s. Got: %s", keyStr, obj.Key)
+		return errors.New("Invalid Key")
+	}
+
+	// Validate each field
+
+	return nil
+}
+
+// LIST REST call
+func httpListGlobals(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpListGlobals: %+v", vars)
+
+	list := make([]*Global, 0)
+	for _, obj := range collections.globals {
+		list = append(list, obj)
+	}
+
+	// Return the list
+	return list, nil
+}
+
+// GET REST call
+func httpGetGlobal(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetGlobal: %+v", vars)
+
+	key := vars["key"]
+
+	obj := collections.globals[key]
+	if obj == nil {
+		log.Errorf("global %s not found", key)
+		return nil, errors.New("global not found")
+	}
+
+	// Return the obj
+	return obj, nil
+}
+
+// CREATE REST call
+func httpCreateGlobal(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetGlobal: %+v", vars)
+
+	var obj Global
+	key := vars["key"]
+
+	// Get object from the request
+	err := json.NewDecoder(r.Body).Decode(&obj)
+	if err != nil {
+		log.Errorf("Error decoding global create request. Err %v", err)
+		return nil, err
+	}
+
+	// set the key
+	obj.Key = key
+
+	// Create the object
+	err = CreateGlobal(&obj)
+	if err != nil {
+		log.Errorf("CreateGlobal error for: %+v. Err: %v", obj, err)
+		return nil, err
+	}
+
+	// Return the obj
+	return obj, nil
+}
+
+// DELETE rest call
+func httpDeleteGlobal(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpDeleteGlobal: %+v", vars)
+
+	key := vars["key"]
+
+	// Delete the object
+	err := DeleteGlobal(key)
+	if err != nil {
+		log.Errorf("DeleteGlobal error for: %s. Err: %v", key, err)
+		return nil, err
+	}
+
+	// Return the obj
+	return key, nil
+}
+
+// Create a global object
+func CreateGlobal(obj *Global) error {
+	// Validate parameters
+	err := ValidateGlobal(obj)
+	if err != nil {
+		log.Errorf("ValidateGlobal retruned error for: %+v. Err: %v", obj, err)
+		return err
+	}
+
+	// Check if we handle this object
+	if objCallbackHandler.GlobalCb == nil {
+		log.Errorf("No callback registered for global object")
+		return errors.New("Invalid object type")
+	}
+
+	saveObj := obj
+
+	// Check if object already exists
+	if collections.globals[obj.Key] != nil {
+		// Perform Update callback
+		err = objCallbackHandler.GlobalCb.GlobalUpdate(collections.globals[obj.Key], obj)
+		if err != nil {
+			log.Errorf("GlobalUpdate retruned error for: %+v. Err: %v", obj, err)
+			return err
+		}
+
+		// save the original object after update
+		saveObj = collections.globals[obj.Key]
+	} else {
+		// save it in cache
+		collections.globals[obj.Key] = obj
+
+		// Perform Create callback
+		err = objCallbackHandler.GlobalCb.GlobalCreate(obj)
+		if err != nil {
+			log.Errorf("GlobalCreate retruned error for: %+v. Err: %v", obj, err)
+			delete(collections.globals, obj.Key)
+			return err
+		}
+	}
+
+	// Write it to modeldb
+	err = saveObj.Write()
+	if err != nil {
+		log.Errorf("Error saving global %s to db. Err: %v", saveObj.Key, err)
+		return err
+	}
+
+	return nil
+}
+
+// Return a pointer to global from collection
+func FindGlobal(key string) *Global {
+	obj := collections.globals[key]
+	if obj == nil {
+		return nil
+	}
+
+	return obj
+}
+
+// Delete a global object
+func DeleteGlobal(key string) error {
+	obj := collections.globals[key]
+	if obj == nil {
+		log.Errorf("global %s not found", key)
+		return errors.New("global not found")
+	}
+
+	// Check if we handle this object
+	if objCallbackHandler.GlobalCb == nil {
+		log.Errorf("No callback registered for global object")
+		return errors.New("Invalid object type")
+	}
+
+	// Perform callback
+	err := objCallbackHandler.GlobalCb.GlobalDelete(obj)
+	if err != nil {
+		log.Errorf("GlobalDelete retruned error for: %+v. Err: %v", obj, err)
+		return err
+	}
+
+	// delete it from modeldb
+	err = obj.Delete()
+	if err != nil {
+		log.Errorf("Error deleting global %s. Err: %v", obj.Key, err)
+	}
+
+	// delete it from cache
+	delete(collections.globals, key)
+
+	return nil
+}
+
+func (self *Global) GetType() string {
+	return "global"
+}
+
+func (self *Global) GetKey() string {
+	return self.Key
+}
+
+func (self *Global) Read() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to read global object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.ReadObj("global", self.Key, self)
+}
+
+func (self *Global) Write() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Write global object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.WriteObj("global", self.Key, self)
+}
+
+func (self *Global) Delete() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Delete global object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.DeleteObj("global", self.Key)
+}
+
+func restoreGlobal() error {
+	strList, err := modeldb.ReadAllObj("global")
+	if err != nil {
+		log.Errorf("Error reading global list. Err: %v", err)
+	}
+
+	for _, objStr := range strList {
+		// Parse the json model
+		var global Global
+		err = json.Unmarshal([]byte(objStr), &global)
+		if err != nil {
+			log.Errorf("Error parsing object %s, Err %v", objStr, err)
+			return err
+		}
+
+		// add it to the collection
+		collections.globals[global.Key] = &global
+	}
+
+	return nil
+}
+
+// Validate a global object
+func ValidateGlobal(obj *Global) error {
+	// Validate key is correct
+	keyStr := obj.Name
+	if obj.Key != keyStr {
+		log.Errorf("Expecting Global Key: %s. Got: %s", keyStr, obj.Key)
+		return errors.New("Invalid Key")
+	}
+
+	// Validate each field
+
+	if len(obj.Name) > 64 {
+		return errors.New("name string too long")
+	}
+
+	if len(obj.NetworkInfraType) > 64 {
+		return errors.New("network-infra-type string too long")
+	}
+
+	vlansMatch := regexp.MustCompile("^([0-9]{1,4}?-[0-9]{1,4}?)$")
+	if vlansMatch.MatchString(obj.Vlans) == false {
+		return errors.New("vlans string invalid format")
+	}
+
+	vxlansMatch := regexp.MustCompile("^([0-9]{1,8}?-[0-9]{1,8}?)$")
+	if vxlansMatch.MatchString(obj.Vxlans) == false {
+		return errors.New("vxlans string invalid format")
 	}
 
 	return nil
@@ -1115,18 +1610,8 @@ func ValidateBgp(obj *Bgp) error {
 		return errors.New("hostname string too long")
 	}
 
-	hostnameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if hostnameMatch.MatchString(obj.Hostname) == false {
-		return errors.New("hostname string invalid format")
-	}
-
 	if len(obj.Neighbor) > 15 {
 		return errors.New("neighbor string too long")
-	}
-
-	neighborMatch := regexp.MustCompile("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3})?$")
-	if neighborMatch.MatchString(obj.Neighbor) == false {
-		return errors.New("neighbor string invalid format")
 	}
 
 	if len(obj.NeighborAs) > 64 {
@@ -1135,801 +1620,6 @@ func ValidateBgp(obj *Bgp) error {
 
 	if len(obj.Routerip) > 15 {
 		return errors.New("routerip string too long")
-	}
-
-	routeripMatch := regexp.MustCompile("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3})(\\-(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]))?/(3[0-1]|2[0-9]|1[0-9]|[1-9])$")
-	if routeripMatch.MatchString(obj.Routerip) == false {
-		return errors.New("routerip string invalid format")
-	}
-
-	return nil
-}
-
-// LIST REST call
-func httpListEndpointGroups(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpListEndpointGroups: %+v", vars)
-
-	list := make([]*EndpointGroup, 0)
-	for _, obj := range collections.endpointGroups {
-		list = append(list, obj)
-	}
-
-	// Return the list
-	return list, nil
-}
-
-// GET REST call
-func httpGetEndpointGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetEndpointGroup: %+v", vars)
-
-	key := vars["key"]
-
-	obj := collections.endpointGroups[key]
-	if obj == nil {
-		log.Errorf("endpointGroup %s not found", key)
-		return nil, errors.New("endpointGroup not found")
-	}
-
-	// Return the obj
-	return obj, nil
-}
-
-// CREATE REST call
-func httpCreateEndpointGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetEndpointGroup: %+v", vars)
-
-	var obj EndpointGroup
-	key := vars["key"]
-
-	// Get object from the request
-	err := json.NewDecoder(r.Body).Decode(&obj)
-	if err != nil {
-		log.Errorf("Error decoding endpointGroup create request. Err %v", err)
-		return nil, err
-	}
-
-	// set the key
-	obj.Key = key
-
-	// Create the object
-	err = CreateEndpointGroup(&obj)
-	if err != nil {
-		log.Errorf("CreateEndpointGroup error for: %+v. Err: %v", obj, err)
-		return nil, err
-	}
-
-	// Return the obj
-	return obj, nil
-}
-
-// DELETE rest call
-func httpDeleteEndpointGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpDeleteEndpointGroup: %+v", vars)
-
-	key := vars["key"]
-
-	// Delete the object
-	err := DeleteEndpointGroup(key)
-	if err != nil {
-		log.Errorf("DeleteEndpointGroup error for: %s. Err: %v", key, err)
-		return nil, err
-	}
-
-	// Return the obj
-	return key, nil
-}
-
-// Create a endpointGroup object
-func CreateEndpointGroup(obj *EndpointGroup) error {
-	// Validate parameters
-	err := ValidateEndpointGroup(obj)
-	if err != nil {
-		log.Errorf("ValidateEndpointGroup retruned error for: %+v. Err: %v", obj, err)
-		return err
-	}
-
-	// Check if we handle this object
-	if objCallbackHandler.EndpointGroupCb == nil {
-		log.Errorf("No callback registered for endpointGroup object")
-		return errors.New("Invalid object type")
-	}
-
-	saveObj := obj
-
-	// Check if object already exists
-	if collections.endpointGroups[obj.Key] != nil {
-		// Perform Update callback
-		err = objCallbackHandler.EndpointGroupCb.EndpointGroupUpdate(collections.endpointGroups[obj.Key], obj)
-		if err != nil {
-			log.Errorf("EndpointGroupUpdate retruned error for: %+v. Err: %v", obj, err)
-			return err
-		}
-
-		// save the original object after update
-		saveObj = collections.endpointGroups[obj.Key]
-	} else {
-		// save it in cache
-		collections.endpointGroups[obj.Key] = obj
-
-		// Perform Create callback
-		err = objCallbackHandler.EndpointGroupCb.EndpointGroupCreate(obj)
-		if err != nil {
-			log.Errorf("EndpointGroupCreate retruned error for: %+v. Err: %v", obj, err)
-			delete(collections.endpointGroups, obj.Key)
-			return err
-		}
-	}
-
-	// Write it to modeldb
-	err = saveObj.Write()
-	if err != nil {
-		log.Errorf("Error saving endpointGroup %s to db. Err: %v", saveObj.Key, err)
-		return err
-	}
-
-	return nil
-}
-
-// Return a pointer to endpointGroup from collection
-func FindEndpointGroup(key string) *EndpointGroup {
-	obj := collections.endpointGroups[key]
-	if obj == nil {
-		return nil
-	}
-
-	return obj
-}
-
-// Delete a endpointGroup object
-func DeleteEndpointGroup(key string) error {
-	obj := collections.endpointGroups[key]
-	if obj == nil {
-		log.Errorf("endpointGroup %s not found", key)
-		return errors.New("endpointGroup not found")
-	}
-
-	// Check if we handle this object
-	if objCallbackHandler.EndpointGroupCb == nil {
-		log.Errorf("No callback registered for endpointGroup object")
-		return errors.New("Invalid object type")
-	}
-
-	// Perform callback
-	err := objCallbackHandler.EndpointGroupCb.EndpointGroupDelete(obj)
-	if err != nil {
-		log.Errorf("EndpointGroupDelete retruned error for: %+v. Err: %v", obj, err)
-		return err
-	}
-
-	// delete it from modeldb
-	err = obj.Delete()
-	if err != nil {
-		log.Errorf("Error deleting endpointGroup %s. Err: %v", obj.Key, err)
-	}
-
-	// delete it from cache
-	delete(collections.endpointGroups, key)
-
-	return nil
-}
-
-func (self *EndpointGroup) GetType() string {
-	return "endpointGroup"
-}
-
-func (self *EndpointGroup) GetKey() string {
-	return self.Key
-}
-
-func (self *EndpointGroup) Read() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to read endpointGroup object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.ReadObj("endpointGroup", self.Key, self)
-}
-
-func (self *EndpointGroup) Write() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to Write endpointGroup object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.WriteObj("endpointGroup", self.Key, self)
-}
-
-func (self *EndpointGroup) Delete() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to Delete endpointGroup object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.DeleteObj("endpointGroup", self.Key)
-}
-
-func restoreEndpointGroup() error {
-	strList, err := modeldb.ReadAllObj("endpointGroup")
-	if err != nil {
-		log.Errorf("Error reading endpointGroup list. Err: %v", err)
-	}
-
-	for _, objStr := range strList {
-		// Parse the json model
-		var endpointGroup EndpointGroup
-		err = json.Unmarshal([]byte(objStr), &endpointGroup)
-		if err != nil {
-			log.Errorf("Error parsing object %s, Err %v", objStr, err)
-			return err
-		}
-
-		// add it to the collection
-		collections.endpointGroups[endpointGroup.Key] = &endpointGroup
-	}
-
-	return nil
-}
-
-// Validate a endpointGroup object
-func ValidateEndpointGroup(obj *EndpointGroup) error {
-	// Validate key is correct
-	keyStr := obj.TenantName + ":" + obj.GroupName
-	if obj.Key != keyStr {
-		log.Errorf("Expecting EndpointGroup Key: %s. Got: %s", keyStr, obj.Key)
-		return errors.New("Invalid Key")
-	}
-
-	// Validate each field
-
-	if len(obj.GroupName) > 64 {
-		return errors.New("groupName string too long")
-	}
-
-	groupNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if groupNameMatch.MatchString(obj.GroupName) == false {
-		return errors.New("groupName string invalid format")
-	}
-
-	if len(obj.NetworkName) > 64 {
-		return errors.New("networkName string too long")
-	}
-
-	networkNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if networkNameMatch.MatchString(obj.NetworkName) == false {
-		return errors.New("networkName string invalid format")
-	}
-
-	if len(obj.TenantName) > 64 {
-		return errors.New("tenantName string too long")
-	}
-
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
-	}
-
-	return nil
-}
-
-// LIST REST call
-func httpListExtContractsGroups(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpListExtContractsGroups: %+v", vars)
-
-	list := make([]*ExtContractsGroup, 0)
-	for _, obj := range collections.extContractsGroups {
-		list = append(list, obj)
-	}
-
-	// Return the list
-	return list, nil
-}
-
-// GET REST call
-func httpGetExtContractsGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetExtContractsGroup: %+v", vars)
-
-	key := vars["key"]
-
-	obj := collections.extContractsGroups[key]
-	if obj == nil {
-		log.Errorf("extContractsGroup %s not found", key)
-		return nil, errors.New("extContractsGroup not found")
-	}
-
-	// Return the obj
-	return obj, nil
-}
-
-// CREATE REST call
-func httpCreateExtContractsGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetExtContractsGroup: %+v", vars)
-
-	var obj ExtContractsGroup
-	key := vars["key"]
-
-	// Get object from the request
-	err := json.NewDecoder(r.Body).Decode(&obj)
-	if err != nil {
-		log.Errorf("Error decoding extContractsGroup create request. Err %v", err)
-		return nil, err
-	}
-
-	// set the key
-	obj.Key = key
-
-	// Create the object
-	err = CreateExtContractsGroup(&obj)
-	if err != nil {
-		log.Errorf("CreateExtContractsGroup error for: %+v. Err: %v", obj, err)
-		return nil, err
-	}
-
-	// Return the obj
-	return obj, nil
-}
-
-// DELETE rest call
-func httpDeleteExtContractsGroup(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpDeleteExtContractsGroup: %+v", vars)
-
-	key := vars["key"]
-
-	// Delete the object
-	err := DeleteExtContractsGroup(key)
-	if err != nil {
-		log.Errorf("DeleteExtContractsGroup error for: %s. Err: %v", key, err)
-		return nil, err
-	}
-
-	// Return the obj
-	return key, nil
-}
-
-// Create a extContractsGroup object
-func CreateExtContractsGroup(obj *ExtContractsGroup) error {
-	// Validate parameters
-	err := ValidateExtContractsGroup(obj)
-	if err != nil {
-		log.Errorf("ValidateExtContractsGroup retruned error for: %+v. Err: %v", obj, err)
-		return err
-	}
-
-	// Check if we handle this object
-	if objCallbackHandler.ExtContractsGroupCb == nil {
-		log.Errorf("No callback registered for extContractsGroup object")
-		return errors.New("Invalid object type")
-	}
-
-	saveObj := obj
-
-	// Check if object already exists
-	if collections.extContractsGroups[obj.Key] != nil {
-		// Perform Update callback
-		err = objCallbackHandler.ExtContractsGroupCb.ExtContractsGroupUpdate(collections.extContractsGroups[obj.Key], obj)
-		if err != nil {
-			log.Errorf("ExtContractsGroupUpdate retruned error for: %+v. Err: %v", obj, err)
-			return err
-		}
-
-		// save the original object after update
-		saveObj = collections.extContractsGroups[obj.Key]
-	} else {
-		// save it in cache
-		collections.extContractsGroups[obj.Key] = obj
-
-		// Perform Create callback
-		err = objCallbackHandler.ExtContractsGroupCb.ExtContractsGroupCreate(obj)
-		if err != nil {
-			log.Errorf("ExtContractsGroupCreate retruned error for: %+v. Err: %v", obj, err)
-			delete(collections.extContractsGroups, obj.Key)
-			return err
-		}
-	}
-
-	// Write it to modeldb
-	err = saveObj.Write()
-	if err != nil {
-		log.Errorf("Error saving extContractsGroup %s to db. Err: %v", saveObj.Key, err)
-		return err
-	}
-
-	return nil
-}
-
-// Return a pointer to extContractsGroup from collection
-func FindExtContractsGroup(key string) *ExtContractsGroup {
-	obj := collections.extContractsGroups[key]
-	if obj == nil {
-		return nil
-	}
-
-	return obj
-}
-
-// Delete a extContractsGroup object
-func DeleteExtContractsGroup(key string) error {
-	obj := collections.extContractsGroups[key]
-	if obj == nil {
-		log.Errorf("extContractsGroup %s not found", key)
-		return errors.New("extContractsGroup not found")
-	}
-
-	// Check if we handle this object
-	if objCallbackHandler.ExtContractsGroupCb == nil {
-		log.Errorf("No callback registered for extContractsGroup object")
-		return errors.New("Invalid object type")
-	}
-
-	// Perform callback
-	err := objCallbackHandler.ExtContractsGroupCb.ExtContractsGroupDelete(obj)
-	if err != nil {
-		log.Errorf("ExtContractsGroupDelete retruned error for: %+v. Err: %v", obj, err)
-		return err
-	}
-
-	// delete it from modeldb
-	err = obj.Delete()
-	if err != nil {
-		log.Errorf("Error deleting extContractsGroup %s. Err: %v", obj.Key, err)
-	}
-
-	// delete it from cache
-	delete(collections.extContractsGroups, key)
-
-	return nil
-}
-
-func (self *ExtContractsGroup) GetType() string {
-	return "extContractsGroup"
-}
-
-func (self *ExtContractsGroup) GetKey() string {
-	return self.Key
-}
-
-func (self *ExtContractsGroup) Read() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to read extContractsGroup object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.ReadObj("extContractsGroup", self.Key, self)
-}
-
-func (self *ExtContractsGroup) Write() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to Write extContractsGroup object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.WriteObj("extContractsGroup", self.Key, self)
-}
-
-func (self *ExtContractsGroup) Delete() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to Delete extContractsGroup object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.DeleteObj("extContractsGroup", self.Key)
-}
-
-func restoreExtContractsGroup() error {
-	strList, err := modeldb.ReadAllObj("extContractsGroup")
-	if err != nil {
-		log.Errorf("Error reading extContractsGroup list. Err: %v", err)
-	}
-
-	for _, objStr := range strList {
-		// Parse the json model
-		var extContractsGroup ExtContractsGroup
-		err = json.Unmarshal([]byte(objStr), &extContractsGroup)
-		if err != nil {
-			log.Errorf("Error parsing object %s, Err %v", objStr, err)
-			return err
-		}
-
-		// add it to the collection
-		collections.extContractsGroups[extContractsGroup.Key] = &extContractsGroup
-	}
-
-	return nil
-}
-
-// Validate a extContractsGroup object
-func ValidateExtContractsGroup(obj *ExtContractsGroup) error {
-	// Validate key is correct
-	keyStr := obj.TenantName + ":" + obj.ContractsGroupName
-	if obj.Key != keyStr {
-		log.Errorf("Expecting ExtContractsGroup Key: %s. Got: %s", keyStr, obj.Key)
-		return errors.New("Invalid Key")
-	}
-
-	// Validate each field
-
-	if len(obj.ContractsGroupName) > 64 {
-		return errors.New("contractsGroupName string too long")
-	}
-
-	contractsGroupNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if contractsGroupNameMatch.MatchString(obj.ContractsGroupName) == false {
-		return errors.New("contractsGroupName string invalid format")
-	}
-
-	if len(obj.TenantName) > 64 {
-		return errors.New("tenantName string too long")
-	}
-
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
-	}
-
-	return nil
-}
-
-// LIST REST call
-func httpListGlobals(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpListGlobals: %+v", vars)
-
-	list := make([]*Global, 0)
-	for _, obj := range collections.globals {
-		list = append(list, obj)
-	}
-
-	// Return the list
-	return list, nil
-}
-
-// GET REST call
-func httpGetGlobal(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetGlobal: %+v", vars)
-
-	key := vars["key"]
-
-	obj := collections.globals[key]
-	if obj == nil {
-		log.Errorf("global %s not found", key)
-		return nil, errors.New("global not found")
-	}
-
-	// Return the obj
-	return obj, nil
-}
-
-// CREATE REST call
-func httpCreateGlobal(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetGlobal: %+v", vars)
-
-	var obj Global
-	key := vars["key"]
-
-	// Get object from the request
-	err := json.NewDecoder(r.Body).Decode(&obj)
-	if err != nil {
-		log.Errorf("Error decoding global create request. Err %v", err)
-		return nil, err
-	}
-
-	// set the key
-	obj.Key = key
-
-	// Create the object
-	err = CreateGlobal(&obj)
-	if err != nil {
-		log.Errorf("CreateGlobal error for: %+v. Err: %v", obj, err)
-		return nil, err
-	}
-
-	// Return the obj
-	return obj, nil
-}
-
-// DELETE rest call
-func httpDeleteGlobal(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpDeleteGlobal: %+v", vars)
-
-	key := vars["key"]
-
-	// Delete the object
-	err := DeleteGlobal(key)
-	if err != nil {
-		log.Errorf("DeleteGlobal error for: %s. Err: %v", key, err)
-		return nil, err
-	}
-
-	// Return the obj
-	return key, nil
-}
-
-// Create a global object
-func CreateGlobal(obj *Global) error {
-	// Validate parameters
-	err := ValidateGlobal(obj)
-	if err != nil {
-		log.Errorf("ValidateGlobal retruned error for: %+v. Err: %v", obj, err)
-		return err
-	}
-
-	// Check if we handle this object
-	if objCallbackHandler.GlobalCb == nil {
-		log.Errorf("No callback registered for global object")
-		return errors.New("Invalid object type")
-	}
-
-	saveObj := obj
-
-	// Check if object already exists
-	if collections.globals[obj.Key] != nil {
-		// Perform Update callback
-		err = objCallbackHandler.GlobalCb.GlobalUpdate(collections.globals[obj.Key], obj)
-		if err != nil {
-			log.Errorf("GlobalUpdate retruned error for: %+v. Err: %v", obj, err)
-			return err
-		}
-
-		// save the original object after update
-		saveObj = collections.globals[obj.Key]
-	} else {
-		// save it in cache
-		collections.globals[obj.Key] = obj
-
-		// Perform Create callback
-		err = objCallbackHandler.GlobalCb.GlobalCreate(obj)
-		if err != nil {
-			log.Errorf("GlobalCreate retruned error for: %+v. Err: %v", obj, err)
-			delete(collections.globals, obj.Key)
-			return err
-		}
-	}
-
-	// Write it to modeldb
-	err = saveObj.Write()
-	if err != nil {
-		log.Errorf("Error saving global %s to db. Err: %v", saveObj.Key, err)
-		return err
-	}
-
-	return nil
-}
-
-// Return a pointer to global from collection
-func FindGlobal(key string) *Global {
-	obj := collections.globals[key]
-	if obj == nil {
-		return nil
-	}
-
-	return obj
-}
-
-// Delete a global object
-func DeleteGlobal(key string) error {
-	obj := collections.globals[key]
-	if obj == nil {
-		log.Errorf("global %s not found", key)
-		return errors.New("global not found")
-	}
-
-	// Check if we handle this object
-	if objCallbackHandler.GlobalCb == nil {
-		log.Errorf("No callback registered for global object")
-		return errors.New("Invalid object type")
-	}
-
-	// Perform callback
-	err := objCallbackHandler.GlobalCb.GlobalDelete(obj)
-	if err != nil {
-		log.Errorf("GlobalDelete retruned error for: %+v. Err: %v", obj, err)
-		return err
-	}
-
-	// delete it from modeldb
-	err = obj.Delete()
-	if err != nil {
-		log.Errorf("Error deleting global %s. Err: %v", obj.Key, err)
-	}
-
-	// delete it from cache
-	delete(collections.globals, key)
-
-	return nil
-}
-
-func (self *Global) GetType() string {
-	return "global"
-}
-
-func (self *Global) GetKey() string {
-	return self.Key
-}
-
-func (self *Global) Read() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to read global object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.ReadObj("global", self.Key, self)
-}
-
-func (self *Global) Write() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to Write global object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.WriteObj("global", self.Key, self)
-}
-
-func (self *Global) Delete() error {
-	if self.Key == "" {
-		log.Errorf("Empty key while trying to Delete global object")
-		return errors.New("Empty key")
-	}
-
-	return modeldb.DeleteObj("global", self.Key)
-}
-
-func restoreGlobal() error {
-	strList, err := modeldb.ReadAllObj("global")
-	if err != nil {
-		log.Errorf("Error reading global list. Err: %v", err)
-	}
-
-	for _, objStr := range strList {
-		// Parse the json model
-		var global Global
-		err = json.Unmarshal([]byte(objStr), &global)
-		if err != nil {
-			log.Errorf("Error parsing object %s, Err %v", objStr, err)
-			return err
-		}
-
-		// add it to the collection
-		collections.globals[global.Key] = &global
-	}
-
-	return nil
-}
-
-// Validate a global object
-func ValidateGlobal(obj *Global) error {
-	// Validate key is correct
-	keyStr := obj.Name
-	if obj.Key != keyStr {
-		log.Errorf("Expecting Global Key: %s. Got: %s", keyStr, obj.Key)
-		return errors.New("Invalid Key")
-	}
-
-	// Validate each field
-
-	if len(obj.Name) > 64 {
-		return errors.New("name string too long")
-	}
-
-	nameMatch := regexp.MustCompile("^(global)$")
-	if nameMatch.MatchString(obj.Name) == false {
-		return errors.New("name string invalid format")
-	}
-
-	if len(obj.NetworkInfraType) > 64 {
-		return errors.New("networkInfraType string too long")
-	}
-
-	networkInfraTypeMatch := regexp.MustCompile("^(aci|aci-opflex|default)?$")
-	if networkInfraTypeMatch.MatchString(obj.NetworkInfraType) == false {
-		return errors.New("networkInfraType string invalid format")
-	}
-
-	vlansMatch := regexp.MustCompile("^([0-9]{1,4}?-[0-9]{1,4}?)$")
-	if vlansMatch.MatchString(obj.Vlans) == false {
-		return errors.New("vlans string invalid format")
-	}
-
-	vxlansMatch := regexp.MustCompile("^([0-9]{1,8}?-[0-9]{1,8}?)$")
-	if vxlansMatch.MatchString(obj.Vxlans) == false {
-		return errors.New("vxlans string invalid format")
 	}
 
 	return nil
@@ -2176,55 +1866,17 @@ func ValidateNetwork(obj *Network) error {
 		return errors.New("encap string invalid format")
 	}
 
-	gatewayMatch := regexp.MustCompile("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3})?$")
-	if gatewayMatch.MatchString(obj.Gateway) == false {
-		return errors.New("gateway string invalid format")
-	}
-
-	ipv6GatewayMatch := regexp.MustCompile("^(((([0-9]|[a-f]|[A-F]){1,4})((\\:([0-9]|[a-f]|[A-F]){1,4}){7}))|(((([0-9]|[a-f]|[A-F]){1,4}\\:){0,6}|\\:)((\\:([0-9]|[a-f]|[A-F]){1,4}){0,6}|\\:)))?$")
-	if ipv6GatewayMatch.MatchString(obj.Ipv6Gateway) == false {
-		return errors.New("ipv6Gateway string invalid format")
-	}
-
-	ipv6SubnetMatch := regexp.MustCompile("^((((([0-9]|[a-f]|[A-F]){1,4})((\\:([0-9]|[a-f]|[A-F]){1,4}){7}))|(((([0-9]|[a-f]|[A-F]){1,4}\\:){0,6}|\\:)((\\:([0-9]|[a-f]|[A-F]){1,4}){0,6}|\\:)))/(1[0-2][0-7]|[1-9][0-9]|[1-9]))?$")
-	if ipv6SubnetMatch.MatchString(obj.Ipv6Subnet) == false {
-		return errors.New("ipv6Subnet string invalid format")
-	}
-
 	if len(obj.NetworkName) > 64 {
 		return errors.New("networkName string too long")
 	}
 
-	networkNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if networkNameMatch.MatchString(obj.NetworkName) == false {
-		return errors.New("networkName string invalid format")
-	}
-
-	if obj.NwType == "" {
-		obj.NwType = "data"
-	}
-
-	nwTypeMatch := regexp.MustCompile("^(infra|data)$")
-	if nwTypeMatch.MatchString(obj.NwType) == false {
-		return errors.New("nwType string invalid format")
-	}
-
-	if obj.PktTag > 4094 {
-		return errors.New("pktTag Value Out of bound")
-	}
-
-	subnetMatch := regexp.MustCompile("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3})(\\-(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]))?/(3[0-1]|2[0-9]|1[0-9]|[1-9])$")
+	subnetMatch := regexp.MustCompile("^([0-9]{1,3}?.[0-9]{1,3}?.[0-9]{1,3}?.[0-9]{1,3}?/[0-9]{1,2}?)$")
 	if subnetMatch.MatchString(obj.Subnet) == false {
 		return errors.New("subnet string invalid format")
 	}
 
 	if len(obj.TenantName) > 64 {
 		return errors.New("tenantName string too long")
-	}
-
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
 	}
 
 	return nil
@@ -2465,24 +2117,6 @@ func ValidatePolicy(obj *Policy) error {
 	}
 
 	// Validate each field
-
-	if len(obj.PolicyName) > 64 {
-		return errors.New("policyName string too long")
-	}
-
-	policyNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if policyNameMatch.MatchString(obj.PolicyName) == false {
-		return errors.New("policyName string invalid format")
-	}
-
-	if len(obj.TenantName) > 64 {
-		return errors.New("tenantName string too long")
-	}
-
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
-	}
 
 	return nil
 }
@@ -2738,32 +2372,12 @@ func ValidateRule(obj *Rule) error {
 		return errors.New("fromEndpointGroup string too long")
 	}
 
-	fromEndpointGroupMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])?$")
-	if fromEndpointGroupMatch.MatchString(obj.FromEndpointGroup) == false {
-		return errors.New("fromEndpointGroup string invalid format")
-	}
-
-	fromIpAddressMatch := regexp.MustCompile("^(((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3})(\\-(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]))?(/(3[0-1]|2[0-9]|1[0-9]|[1-9]))?)?$")
-	if fromIpAddressMatch.MatchString(obj.FromIpAddress) == false {
-		return errors.New("fromIpAddress string invalid format")
-	}
-
 	if len(obj.FromNetwork) > 64 {
 		return errors.New("fromNetwork string too long")
 	}
 
-	fromNetworkMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])?$")
-	if fromNetworkMatch.MatchString(obj.FromNetwork) == false {
-		return errors.New("fromNetwork string invalid format")
-	}
-
 	if len(obj.PolicyName) > 64 {
 		return errors.New("policyName string too long")
-	}
-
-	policyNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if policyNameMatch.MatchString(obj.PolicyName) == false {
-		return errors.New("policyName string invalid format")
 	}
 
 	if obj.Port > 65535 {
@@ -2791,52 +2405,27 @@ func ValidateRule(obj *Rule) error {
 		return errors.New("ruleId string too long")
 	}
 
-	ruleIdMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if ruleIdMatch.MatchString(obj.RuleID) == false {
-		return errors.New("ruleId string invalid format")
-	}
-
 	if len(obj.TenantName) > 64 {
 		return errors.New("tenantName string too long")
-	}
-
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
 	}
 
 	if len(obj.ToEndpointGroup) > 64 {
 		return errors.New("toEndpointGroup string too long")
 	}
 
-	toEndpointGroupMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])?$")
-	if toEndpointGroupMatch.MatchString(obj.ToEndpointGroup) == false {
-		return errors.New("toEndpointGroup string invalid format")
-	}
-
-	toIpAddressMatch := regexp.MustCompile("^(((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3})(\\-(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]))?(/(3[0-1]|2[0-9]|1[0-9]|[1-9]))?)?$")
-	if toIpAddressMatch.MatchString(obj.ToIpAddress) == false {
-		return errors.New("toIpAddress string invalid format")
-	}
-
 	if len(obj.ToNetwork) > 64 {
 		return errors.New("toNetwork string too long")
-	}
-
-	toNetworkMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])?$")
-	if toNetworkMatch.MatchString(obj.ToNetwork) == false {
-		return errors.New("toNetwork string invalid format")
 	}
 
 	return nil
 }
 
 // LIST REST call
-func httpListServiceLBs(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpListServiceLBs: %+v", vars)
+func httpListServices(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpListServices: %+v", vars)
 
-	list := make([]*ServiceLB, 0)
-	for _, obj := range collections.serviceLBs {
+	list := make([]*Service, 0)
+	for _, obj := range collections.services {
 		list = append(list, obj)
 	}
 
@@ -2845,15 +2434,15 @@ func httpListServiceLBs(w http.ResponseWriter, r *http.Request, vars map[string]
 }
 
 // GET REST call
-func httpGetServiceLB(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetServiceLB: %+v", vars)
+func httpGetService(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetService: %+v", vars)
 
 	key := vars["key"]
 
-	obj := collections.serviceLBs[key]
+	obj := collections.services[key]
 	if obj == nil {
-		log.Errorf("serviceLB %s not found", key)
-		return nil, errors.New("serviceLB not found")
+		log.Errorf("service %s not found", key)
+		return nil, errors.New("service not found")
 	}
 
 	// Return the obj
@@ -2861,16 +2450,16 @@ func httpGetServiceLB(w http.ResponseWriter, r *http.Request, vars map[string]st
 }
 
 // CREATE REST call
-func httpCreateServiceLB(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpGetServiceLB: %+v", vars)
+func httpCreateService(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetService: %+v", vars)
 
-	var obj ServiceLB
+	var obj Service
 	key := vars["key"]
 
 	// Get object from the request
 	err := json.NewDecoder(r.Body).Decode(&obj)
 	if err != nil {
-		log.Errorf("Error decoding serviceLB create request. Err %v", err)
+		log.Errorf("Error decoding service create request. Err %v", err)
 		return nil, err
 	}
 
@@ -2878,9 +2467,9 @@ func httpCreateServiceLB(w http.ResponseWriter, r *http.Request, vars map[string
 	obj.Key = key
 
 	// Create the object
-	err = CreateServiceLB(&obj)
+	err = CreateService(&obj)
 	if err != nil {
-		log.Errorf("CreateServiceLB error for: %+v. Err: %v", obj, err)
+		log.Errorf("CreateService error for: %+v. Err: %v", obj, err)
 		return nil, err
 	}
 
@@ -2889,15 +2478,15 @@ func httpCreateServiceLB(w http.ResponseWriter, r *http.Request, vars map[string
 }
 
 // DELETE rest call
-func httpDeleteServiceLB(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
-	log.Debugf("Received httpDeleteServiceLB: %+v", vars)
+func httpDeleteService(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpDeleteService: %+v", vars)
 
 	key := vars["key"]
 
 	// Delete the object
-	err := DeleteServiceLB(key)
+	err := DeleteService(key)
 	if err != nil {
-		log.Errorf("DeleteServiceLB error for: %s. Err: %v", key, err)
+		log.Errorf("DeleteService error for: %s. Err: %v", key, err)
 		return nil, err
 	}
 
@@ -2905,43 +2494,43 @@ func httpDeleteServiceLB(w http.ResponseWriter, r *http.Request, vars map[string
 	return key, nil
 }
 
-// Create a serviceLB object
-func CreateServiceLB(obj *ServiceLB) error {
+// Create a service object
+func CreateService(obj *Service) error {
 	// Validate parameters
-	err := ValidateServiceLB(obj)
+	err := ValidateService(obj)
 	if err != nil {
-		log.Errorf("ValidateServiceLB retruned error for: %+v. Err: %v", obj, err)
+		log.Errorf("ValidateService retruned error for: %+v. Err: %v", obj, err)
 		return err
 	}
 
 	// Check if we handle this object
-	if objCallbackHandler.ServiceLBCb == nil {
-		log.Errorf("No callback registered for serviceLB object")
+	if objCallbackHandler.ServiceCb == nil {
+		log.Errorf("No callback registered for service object")
 		return errors.New("Invalid object type")
 	}
 
 	saveObj := obj
 
 	// Check if object already exists
-	if collections.serviceLBs[obj.Key] != nil {
+	if collections.services[obj.Key] != nil {
 		// Perform Update callback
-		err = objCallbackHandler.ServiceLBCb.ServiceLBUpdate(collections.serviceLBs[obj.Key], obj)
+		err = objCallbackHandler.ServiceCb.ServiceUpdate(collections.services[obj.Key], obj)
 		if err != nil {
-			log.Errorf("ServiceLBUpdate retruned error for: %+v. Err: %v", obj, err)
+			log.Errorf("ServiceUpdate retruned error for: %+v. Err: %v", obj, err)
 			return err
 		}
 
 		// save the original object after update
-		saveObj = collections.serviceLBs[obj.Key]
+		saveObj = collections.services[obj.Key]
 	} else {
 		// save it in cache
-		collections.serviceLBs[obj.Key] = obj
+		collections.services[obj.Key] = obj
 
 		// Perform Create callback
-		err = objCallbackHandler.ServiceLBCb.ServiceLBCreate(obj)
+		err = objCallbackHandler.ServiceCb.ServiceCreate(obj)
 		if err != nil {
-			log.Errorf("ServiceLBCreate retruned error for: %+v. Err: %v", obj, err)
-			delete(collections.serviceLBs, obj.Key)
+			log.Errorf("ServiceCreate retruned error for: %+v. Err: %v", obj, err)
+			delete(collections.services, obj.Key)
 			return err
 		}
 	}
@@ -2949,16 +2538,16 @@ func CreateServiceLB(obj *ServiceLB) error {
 	// Write it to modeldb
 	err = saveObj.Write()
 	if err != nil {
-		log.Errorf("Error saving serviceLB %s to db. Err: %v", saveObj.Key, err)
+		log.Errorf("Error saving service %s to db. Err: %v", saveObj.Key, err)
 		return err
 	}
 
 	return nil
 }
 
-// Return a pointer to serviceLB from collection
-func FindServiceLB(key string) *ServiceLB {
-	obj := collections.serviceLBs[key]
+// Return a pointer to service from collection
+func FindService(key string) *Service {
+	obj := collections.services[key]
 	if obj == nil {
 		return nil
 	}
@@ -2966,142 +2555,345 @@ func FindServiceLB(key string) *ServiceLB {
 	return obj
 }
 
-// Delete a serviceLB object
-func DeleteServiceLB(key string) error {
-	obj := collections.serviceLBs[key]
+// Delete a service object
+func DeleteService(key string) error {
+	obj := collections.services[key]
 	if obj == nil {
-		log.Errorf("serviceLB %s not found", key)
-		return errors.New("serviceLB not found")
+		log.Errorf("service %s not found", key)
+		return errors.New("service not found")
 	}
 
 	// Check if we handle this object
-	if objCallbackHandler.ServiceLBCb == nil {
-		log.Errorf("No callback registered for serviceLB object")
+	if objCallbackHandler.ServiceCb == nil {
+		log.Errorf("No callback registered for service object")
 		return errors.New("Invalid object type")
 	}
 
 	// Perform callback
-	err := objCallbackHandler.ServiceLBCb.ServiceLBDelete(obj)
+	err := objCallbackHandler.ServiceCb.ServiceDelete(obj)
 	if err != nil {
-		log.Errorf("ServiceLBDelete retruned error for: %+v. Err: %v", obj, err)
+		log.Errorf("ServiceDelete retruned error for: %+v. Err: %v", obj, err)
 		return err
 	}
 
 	// delete it from modeldb
 	err = obj.Delete()
 	if err != nil {
-		log.Errorf("Error deleting serviceLB %s. Err: %v", obj.Key, err)
+		log.Errorf("Error deleting service %s. Err: %v", obj.Key, err)
 	}
 
 	// delete it from cache
-	delete(collections.serviceLBs, key)
+	delete(collections.services, key)
 
 	return nil
 }
 
-func (self *ServiceLB) GetType() string {
-	return "serviceLB"
+func (self *Service) GetType() string {
+	return "service"
 }
 
-func (self *ServiceLB) GetKey() string {
+func (self *Service) GetKey() string {
 	return self.Key
 }
 
-func (self *ServiceLB) Read() error {
+func (self *Service) Read() error {
 	if self.Key == "" {
-		log.Errorf("Empty key while trying to read serviceLB object")
+		log.Errorf("Empty key while trying to read service object")
 		return errors.New("Empty key")
 	}
 
-	return modeldb.ReadObj("serviceLB", self.Key, self)
+	return modeldb.ReadObj("service", self.Key, self)
 }
 
-func (self *ServiceLB) Write() error {
+func (self *Service) Write() error {
 	if self.Key == "" {
-		log.Errorf("Empty key while trying to Write serviceLB object")
+		log.Errorf("Empty key while trying to Write service object")
 		return errors.New("Empty key")
 	}
 
-	return modeldb.WriteObj("serviceLB", self.Key, self)
+	return modeldb.WriteObj("service", self.Key, self)
 }
 
-func (self *ServiceLB) Delete() error {
+func (self *Service) Delete() error {
 	if self.Key == "" {
-		log.Errorf("Empty key while trying to Delete serviceLB object")
+		log.Errorf("Empty key while trying to Delete service object")
 		return errors.New("Empty key")
 	}
 
-	return modeldb.DeleteObj("serviceLB", self.Key)
+	return modeldb.DeleteObj("service", self.Key)
 }
 
-func restoreServiceLB() error {
-	strList, err := modeldb.ReadAllObj("serviceLB")
+func restoreService() error {
+	strList, err := modeldb.ReadAllObj("service")
 	if err != nil {
-		log.Errorf("Error reading serviceLB list. Err: %v", err)
+		log.Errorf("Error reading service list. Err: %v", err)
 	}
 
 	for _, objStr := range strList {
 		// Parse the json model
-		var serviceLB ServiceLB
-		err = json.Unmarshal([]byte(objStr), &serviceLB)
+		var service Service
+		err = json.Unmarshal([]byte(objStr), &service)
 		if err != nil {
 			log.Errorf("Error parsing object %s, Err %v", objStr, err)
 			return err
 		}
 
 		// add it to the collection
-		collections.serviceLBs[serviceLB.Key] = &serviceLB
+		collections.services[service.Key] = &service
 	}
 
 	return nil
 }
 
-// Validate a serviceLB object
-func ValidateServiceLB(obj *ServiceLB) error {
+// Validate a service object
+func ValidateService(obj *Service) error {
 	// Validate key is correct
-	keyStr := obj.TenantName + ":" + obj.ServiceName
+	keyStr := obj.TenantName + ":" + obj.AppName + ":" + obj.ServiceName
 	if obj.Key != keyStr {
-		log.Errorf("Expecting ServiceLB Key: %s. Got: %s", keyStr, obj.Key)
+		log.Errorf("Expecting Service Key: %s. Got: %s", keyStr, obj.Key)
 		return errors.New("Invalid Key")
 	}
 
 	// Validate each field
 
-	if len(obj.IpAddress) > 15 {
-		return errors.New("ipAddress string too long")
+	return nil
+}
+
+// LIST REST call
+func httpListServiceInstances(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpListServiceInstances: %+v", vars)
+
+	list := make([]*ServiceInstance, 0)
+	for _, obj := range collections.serviceInstances {
+		list = append(list, obj)
 	}
 
-	ipAddressMatch := regexp.MustCompile("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3})?$")
-	if ipAddressMatch.MatchString(obj.IpAddress) == false {
-		return errors.New("ipAddress string invalid format")
+	// Return the list
+	return list, nil
+}
+
+// GET REST call
+func httpGetServiceInstance(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetServiceInstance: %+v", vars)
+
+	key := vars["key"]
+
+	obj := collections.serviceInstances[key]
+	if obj == nil {
+		log.Errorf("serviceInstance %s not found", key)
+		return nil, errors.New("serviceInstance not found")
 	}
 
-	if len(obj.NetworkName) > 64 {
-		return errors.New("networkName string too long")
+	// Return the obj
+	return obj, nil
+}
+
+// CREATE REST call
+func httpCreateServiceInstance(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpGetServiceInstance: %+v", vars)
+
+	var obj ServiceInstance
+	key := vars["key"]
+
+	// Get object from the request
+	err := json.NewDecoder(r.Body).Decode(&obj)
+	if err != nil {
+		log.Errorf("Error decoding serviceInstance create request. Err %v", err)
+		return nil, err
 	}
 
-	networkNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if networkNameMatch.MatchString(obj.NetworkName) == false {
-		return errors.New("networkName string invalid format")
+	// set the key
+	obj.Key = key
+
+	// Create the object
+	err = CreateServiceInstance(&obj)
+	if err != nil {
+		log.Errorf("CreateServiceInstance error for: %+v. Err: %v", obj, err)
+		return nil, err
 	}
 
-	if len(obj.ServiceName) > 256 {
-		return errors.New("serviceName string too long")
+	// Return the obj
+	return obj, nil
+}
+
+// DELETE rest call
+func httpDeleteServiceInstance(w http.ResponseWriter, r *http.Request, vars map[string]string) (interface{}, error) {
+	log.Debugf("Received httpDeleteServiceInstance: %+v", vars)
+
+	key := vars["key"]
+
+	// Delete the object
+	err := DeleteServiceInstance(key)
+	if err != nil {
+		log.Errorf("DeleteServiceInstance error for: %s. Err: %v", key, err)
+		return nil, err
 	}
 
-	serviceNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if serviceNameMatch.MatchString(obj.ServiceName) == false {
-		return errors.New("serviceName string invalid format")
+	// Return the obj
+	return key, nil
+}
+
+// Create a serviceInstance object
+func CreateServiceInstance(obj *ServiceInstance) error {
+	// Validate parameters
+	err := ValidateServiceInstance(obj)
+	if err != nil {
+		log.Errorf("ValidateServiceInstance retruned error for: %+v. Err: %v", obj, err)
+		return err
 	}
 
-	if len(obj.TenantName) > 64 {
-		return errors.New("tenantName string too long")
+	// Check if we handle this object
+	if objCallbackHandler.ServiceInstanceCb == nil {
+		log.Errorf("No callback registered for serviceInstance object")
+		return errors.New("Invalid object type")
 	}
 
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
+	saveObj := obj
+
+	// Check if object already exists
+	if collections.serviceInstances[obj.Key] != nil {
+		// Perform Update callback
+		err = objCallbackHandler.ServiceInstanceCb.ServiceInstanceUpdate(collections.serviceInstances[obj.Key], obj)
+		if err != nil {
+			log.Errorf("ServiceInstanceUpdate retruned error for: %+v. Err: %v", obj, err)
+			return err
+		}
+
+		// save the original object after update
+		saveObj = collections.serviceInstances[obj.Key]
+	} else {
+		// save it in cache
+		collections.serviceInstances[obj.Key] = obj
+
+		// Perform Create callback
+		err = objCallbackHandler.ServiceInstanceCb.ServiceInstanceCreate(obj)
+		if err != nil {
+			log.Errorf("ServiceInstanceCreate retruned error for: %+v. Err: %v", obj, err)
+			delete(collections.serviceInstances, obj.Key)
+			return err
+		}
 	}
+
+	// Write it to modeldb
+	err = saveObj.Write()
+	if err != nil {
+		log.Errorf("Error saving serviceInstance %s to db. Err: %v", saveObj.Key, err)
+		return err
+	}
+
+	return nil
+}
+
+// Return a pointer to serviceInstance from collection
+func FindServiceInstance(key string) *ServiceInstance {
+	obj := collections.serviceInstances[key]
+	if obj == nil {
+		return nil
+	}
+
+	return obj
+}
+
+// Delete a serviceInstance object
+func DeleteServiceInstance(key string) error {
+	obj := collections.serviceInstances[key]
+	if obj == nil {
+		log.Errorf("serviceInstance %s not found", key)
+		return errors.New("serviceInstance not found")
+	}
+
+	// Check if we handle this object
+	if objCallbackHandler.ServiceInstanceCb == nil {
+		log.Errorf("No callback registered for serviceInstance object")
+		return errors.New("Invalid object type")
+	}
+
+	// Perform callback
+	err := objCallbackHandler.ServiceInstanceCb.ServiceInstanceDelete(obj)
+	if err != nil {
+		log.Errorf("ServiceInstanceDelete retruned error for: %+v. Err: %v", obj, err)
+		return err
+	}
+
+	// delete it from modeldb
+	err = obj.Delete()
+	if err != nil {
+		log.Errorf("Error deleting serviceInstance %s. Err: %v", obj.Key, err)
+	}
+
+	// delete it from cache
+	delete(collections.serviceInstances, key)
+
+	return nil
+}
+
+func (self *ServiceInstance) GetType() string {
+	return "serviceInstance"
+}
+
+func (self *ServiceInstance) GetKey() string {
+	return self.Key
+}
+
+func (self *ServiceInstance) Read() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to read serviceInstance object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.ReadObj("serviceInstance", self.Key, self)
+}
+
+func (self *ServiceInstance) Write() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Write serviceInstance object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.WriteObj("serviceInstance", self.Key, self)
+}
+
+func (self *ServiceInstance) Delete() error {
+	if self.Key == "" {
+		log.Errorf("Empty key while trying to Delete serviceInstance object")
+		return errors.New("Empty key")
+	}
+
+	return modeldb.DeleteObj("serviceInstance", self.Key)
+}
+
+func restoreServiceInstance() error {
+	strList, err := modeldb.ReadAllObj("serviceInstance")
+	if err != nil {
+		log.Errorf("Error reading serviceInstance list. Err: %v", err)
+	}
+
+	for _, objStr := range strList {
+		// Parse the json model
+		var serviceInstance ServiceInstance
+		err = json.Unmarshal([]byte(objStr), &serviceInstance)
+		if err != nil {
+			log.Errorf("Error parsing object %s, Err %v", objStr, err)
+			return err
+		}
+
+		// add it to the collection
+		collections.serviceInstances[serviceInstance.Key] = &serviceInstance
+	}
+
+	return nil
+}
+
+// Validate a serviceInstance object
+func ValidateServiceInstance(obj *ServiceInstance) error {
+	// Validate key is correct
+	keyStr := obj.TenantName + ":" + obj.AppName + ":" + obj.ServiceName + ":" + obj.InstanceID
+	if obj.Key != keyStr {
+		log.Errorf("Expecting ServiceInstance Key: %s. Got: %s", keyStr, obj.Key)
+		return errors.New("Invalid Key")
+	}
+
+	// Validate each field
 
 	return nil
 }
@@ -3346,18 +3138,8 @@ func ValidateTenant(obj *Tenant) error {
 		return errors.New("defaultNetwork string too long")
 	}
 
-	defaultNetworkMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])?$")
-	if defaultNetworkMatch.MatchString(obj.DefaultNetwork) == false {
-		return errors.New("defaultNetwork string invalid format")
-	}
-
 	if len(obj.TenantName) > 64 {
 		return errors.New("tenantName string too long")
-	}
-
-	tenantNameMatch := regexp.MustCompile("^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$")
-	if tenantNameMatch.MatchString(obj.TenantName) == false {
-		return errors.New("tenantName string invalid format")
 	}
 
 	return nil
