@@ -179,6 +179,7 @@ func (gp *EpgPolicy) createOfnetRule(rule *contivModel.Rule, dir string) (*ofnet
 	ofnetRule.RuleId = ruleID
 	ofnetRule.Priority = rule.Priority
 	ofnetRule.Action = rule.Action
+	ofnetRule.Sla = rule.Sla
 
 	// See if user specified an endpoint Group in the rule
 	if rule.FromEndpointGroup != "" {

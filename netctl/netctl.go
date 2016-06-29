@@ -131,14 +131,14 @@ func addRule(ctx *cli.Context) {
 		errExit(ctx, exitHelp, "Unknown direction", false)
 	}
 	log.Infof("SLAAAA: %+v",  ctx.String("sla"))
-	sla := 0x90000
-	if ctx.String("sla") == "lowest-latency" {
-		sla = 0x900000000000
-	} else  if ctx.String("sla") == "secure-path" {
-                sla = 0x900100000000
-        } else  if ctx.String("sla") == "highest-bandwidth" {
-                sla = 0x900200000000
-        } 
+	//sla := 0x90000
+	//if ctx.String("sla") == "lowest-latency" {
+	//	sla = 0x900000000000
+	//} else  if ctx.String("sla") == "secure-path" {
+         //       sla = 0x900100000000
+        //} else  if ctx.String("sla") == "highest-bandwidth" {
+        //        sla = 0x900200000000
+        //} 
 	errCheck(ctx, getClient(ctx).RulePost(&contivClient.Rule{
 		TenantName:        ctx.String("tenant"),
 		PolicyName:        ctx.Args()[0],
@@ -154,7 +154,7 @@ func addRule(ctx *cli.Context) {
 		Protocol:          ctx.String("protocol"),
 		Port:              ctx.Int("port"),
 		Action:            ctx.String("action"),
-		Sla:               sla,
+		Sla:               ctx.String("sla"),
 	}))
 }
 
