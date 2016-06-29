@@ -109,6 +109,7 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	timeout := grpc.WithTimeout(time.Second)
 	conn, err := grpc.Dial("127.0.0.1:179", timeout, grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
+		log.Infof("GRPC timeout")
 		log.Fatal(err)
 	}
 	self.cc = conn
@@ -129,7 +130,7 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	origin, _ := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_INCOMPLETE).Serialize()
 	path.Pattrs = append(path.Pattrs, origin)
 
-	log.Debugf("Creating the loopback port ")
+	log.Infof("Creating the loopback port ")
 	err = self.agent.ovsDriver.CreatePort(self.intfName, "internal", 1)
 	if err != nil {
 		log.Errorf("Error creating the port: %v", err)
@@ -137,7 +138,7 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	defer self.agent.ovsDriver.DeletePort(self.intfName)
 
 	intfIP := fmt.Sprintf("%s/%d", self.routerIP, len)
-	log.Debugf("Creating inb01 with ", intfIP)
+	log.Infof("Creating inb01 with ", intfIP)
 	ofPortno, _ := self.agent.ovsDriver.GetOfpPortNo(self.intfName)
 
 	link, err := netlink.LinkByName(self.intfName)
@@ -158,8 +159,9 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	}
 
 	intf, _ := net.InterfaceByName(self.intfName)
+	log.Infof("routerIP ", self.routerIP)
 	epid := self.agent.getEndpointIdByIpVrf(net.ParseIP(self.routerIP), "default")
-
+	 log.Infof("Create VRF ")
 	_, ok := self.agent.createVrf("default")
 	if !ok {
 		log.Errorf("Error Creating default vrf for Bgp")
@@ -181,10 +183,10 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	// Add the endpoint to local routing table
 
 	self.agent.endpointDb[epid] = epreg
+	//log.Infof("self.agent.endpointDb[epid] %v " , self.agent.endpointDb[epid] )
 	self.agent.localEndpointDb[epreg.PortNo] = epreg
 	fmt.Println(epreg)
 	err = self.agent.datapath.AddLocalEndpoint(*epreg)
-
 	//Add bgp router id as well
 	bgpGlobalCfg := &bgpconf.Global{}
 	setDefaultGlobalConfigValues(bgpGlobalCfg)
@@ -193,9 +195,9 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	self.bgpServer.SetGlobalType(*bgpGlobalCfg)
 
 	self.advPathCh <- path
-
+	log.Infof("start monitoring ")
 	//monitor route updates from peer
-	//go self.monitorBest()
+	go self.monitorBest()
 	//monitor peer state
 	go self.monitorPeer()
 	self.start <- true
@@ -313,9 +315,7 @@ func (self *OfnetBgp) AddProtoNeighbor(neighborInfo *OfnetProtoNeighborInfo, loc
 	p := &bgpconf.Neighbor{}
 	setNeighborConfigValues(p)
 	p.Config.NeighborAddress = neighborInfo.NeighborIP
-	log.Infof("p.NeighborAddress %v is added", p.Config.NeighborAddress)
 	p.Config.NeighborAddress = neighborInfo.NeighborIP
-	log.Infof("p.Config.NeighborAddress %v is added", p.Config.NeighborAddress)
 	p.Config.PeerAs = uint32(peerAs)
 	p.Config.LocalAs = uint32(localAs)
 	//FIX ME set ipv6 depending on peerip (for v6 BGP)
@@ -331,9 +331,8 @@ func (self *OfnetBgp) AddProtoNeighbor(neighborInfo *OfnetProtoNeighborInfo, loc
 
 	self.bgpServer.PeerAdd(*p)
 	self.bgpServer.SetRoutingPolicy(policyConfig)
-	epid := self.agent.getEndpointIdByIpVrf(net.ParseIP(self.routerIP), "default")
+	epid := self.agent.getEndpointIdByIpVrf(net.ParseIP(neighborInfo.NeighborIP), "default")
 
-	log.Infof("Peer %v is added", p.Config.NeighborAddress)
 
 
 	epreg := &OfnetEndpoint{
@@ -367,7 +366,6 @@ func (self *OfnetBgp) AddProtoNeighbor(neighborInfo *OfnetProtoNeighborInfo, loc
 		}
 		self.AddLocalProtoRoute(path)
 	}
-	log.Infof("DONE - Received AddProtoNeighbor to Add bgp neighbor %v", neighborInfo.NeighborIP)
 	return nil
 }
 
@@ -390,10 +388,7 @@ func (self *OfnetBgp) AddLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error {
 		return nil
 	}
 
-	log.Infof("Received AddLocalProtoRoute to add local endpoint to protocol RIB: %v", pathInfo)
-	 log.Infof("Received AddLocalProtoRoute self.myBgpAs: %v", self.myBgpAs )
         aspathParam := []bgp.AsPathParamInterface{bgp.NewAs4PathParam(2, []uint32{self.myBgpAs})}
-        log.Infof("Received AddLocalProtoRoute aspathParam: %v", aspathParam)
         aspath,_ := bgp.NewPathAttributeAsPath(aspathParam).Serialize()
 
 	path := &api.Path{
@@ -406,7 +401,6 @@ func (self *OfnetBgp) AddLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error {
 	path.Nlri, _ = nlri.Serialize()
 	origin, _ := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_EGP).Serialize()
 	path.Pattrs = append(path.Pattrs, origin)
-//	log.Infof("Received AddLocalProtoRoute self.myBgpAs: %v", self.myBgpAs )
 //	aspathParam := []bgp.AsPathParamInterface{bgp.NewAs4PathParam(2, []uint32{self.myBgpAs})}
 //	log.Infof("Received AddLocalProtoRoute aspathParam: %v", aspathParam)
 //	aspath,_ := bgp.NewPathAttributeAsPath(aspathParam).Serialize()
@@ -425,11 +419,11 @@ func (self *OfnetBgp) AddLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error {
 	path.Pattrs = append(path.Pattrs, mpreach)
 	//path.Pattrs = append(path.Pattrs, n)
 
-	arg := &api.InjectMrtRequest{
+	arg := &api.AddPathRequest{
 		Resource: api.Resource_GLOBAL,
-		Paths:     []*api.Path{path},
+		VrfId:          "default",
+		Path:     path,
 	}
-	log.Infof("Received AddLocalProtoRoute arg: %v", arg.Paths)
 
 	//send arguement stream
 	client := api.NewGobgpApiClient(self.cc)
@@ -437,24 +431,11 @@ func (self *OfnetBgp) AddLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error {
 		log.Errorf("Gobgpapi stream invalid")
 		return nil
 	}
-
-	stream,err := client.InjectMrt(context.Background())
+	stream ,err := client.AddPath(context.Background(), arg)
 	if err != nil {
-		log.Errorf("Fail to enforce Modpath: %v", err)
+		log.Errorf("Fail to enforce Modpath: %v %v", err, stream)
 		return err
 	}
-	err = stream.Send(arg)
-	if err != nil {
-		log.Errorf("Failed to send strean: %v", err)
-		return err
-	}
-	stream.CloseSend()
-	_, e := stream.CloseAndRecv()
-	if e != nil {
-		log.Errorf("Falied toclose stream ")
-		return e
-	}
-	log.Infof("Done- AddLocalProtoRoute to add local endpoint to protocol RIB: %v", pathInfo)
 	return nil
 }
 
@@ -478,10 +459,10 @@ func (self *OfnetBgp) DeleteLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error
 	n, _ := bgp.NewPathAttributeNextHop(pathInfo.nextHopIP).Serialize()
 	path.Pattrs = append(path.Pattrs, n)
 	path.IsWithdraw = true
-	paths := []*api.Path{path}
-        arg := &api.InjectMrtRequest{	
+	//paths := []*api.Path{path}
+        arg := &api.DeletePathRequest{	
 		Resource: api.Resource_GLOBAL,
-		Paths:    paths,
+		Path:    path,
 	}
 
 	//send arguement stream
@@ -491,24 +472,11 @@ func (self *OfnetBgp) DeleteLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error
 		return nil
 	}
 
-	stream,err := client.InjectMrt(context.Background())
+	_, err := client.DeletePath(context.Background(), arg)
 
 	if err != nil {
 		log.Errorf("Fail to enforce Modpathi: %v", err)
 		return err
-	}
-	
-	err = stream.Send(arg)
-	if err != nil {
-		log.Errorf("Failed to send strean: %v", err)
-		return err
-	}
-	stream.CloseSend()
-
-	_, e := stream.CloseAndRecv()
-	if e != nil {
-		log.Errorf("Falied toclose stream ")
-		return e
 	}
 
 
@@ -516,19 +484,19 @@ func (self *OfnetBgp) DeleteLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error
 }
 
 //monitorBest monitors for route updates/changes form peer
-/*func (self *OfnetBgp) monitorBest() {
+func (self *OfnetBgp) monitorBest() {
 
 	client := api.NewGobgpApiClient(self.cc)
 	if client == nil {
 		log.Errorf("Invalid Gobgpapi client")
 		return
 	}
-	arg := &api.Arguments{
-		Resource: api.Resource_GLOBAL,
+	arg := &api.Table{
+		Type: api.Resource_GLOBAL,
 		Family:       uint32(bgp.RF_IPv4_MPLS),
 	}
 
-	stream, err := client.MonitorPeerState(context.Background(), arg)
+	stream, err := client.MonitorRib(context.Background(), arg)
 	if err != nil {
 		return
 	}
@@ -544,7 +512,7 @@ func (self *OfnetBgp) DeleteLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error
 		self.modRibCh <- dst.Paths[0]
 	}
 	return
-}*/
+}
 
 // monitorPeer is used to monitor the bgp peer state
 func (self *OfnetBgp) monitorPeer() {
@@ -810,7 +778,7 @@ func (self *OfnetBgp) sendArp() {
 
 		// Send it out
 		self.agent.ofSwitch.Send(pktOut)
-		time.Sleep(1800 * time.Second)
+		time.Sleep(100 * time.Second)
 	}
 }
 

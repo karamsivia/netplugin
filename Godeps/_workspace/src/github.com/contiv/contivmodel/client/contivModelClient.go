@@ -290,7 +290,7 @@ type Rule struct {
 	Key string `json:"key,omitempty"`
 
 	Action            string `json:"action,omitempty"`            // Action
-	Sla               int    `json:"sla,omitempty"`               // SRTE - Sla 
+	Sla               string    `json:"sla,omitempty"`               // SRTE - Sla 
 	Direction         string `json:"direction,omitempty"`         // Direction
 	FromEndpointGroup string `json:"fromEndpointGroup,omitempty"` // From Endpoint Group
 	FromIpAddress     string `json:"fromIpAddress,omitempty"`     // IP Address

@@ -148,7 +148,7 @@ type OfnetPolicyRule struct {
 	DstPort          uint16 // destination port
 	TcpFlags         string // TCP flags to match: syn || syn,ack || ack || syn,!ack || !syn,ack;
 	Action           string // rule action: 'accept' or 'deny'
-	Sla				 uint64  //SRTE sla
+	Sla		 string  //SRTE sla
 }
 
 type OfnetPolicy struct { // SRTE - policy

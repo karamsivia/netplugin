@@ -465,33 +465,6 @@ func (self *PolicyAgent) AddRule(rule *OfnetPolicyRule, ret *bool) error {
 	} else if rule.Action == "sla" {  //SRTE Rule action
 
 		log.Infof("SLA is : %+v", rule.Sla)
-		/*
-		var t uint16  = 0x1000
- 		polFlow, err := self.policyTable.NewFlow(ofctrl.FlowMatch{
-			Priority: FLOW_MATCH_PRIORITY,
-			Ethertype:    0x0800,
-			VlanId:      t,
-			VlanIdMask:  &t,
-			Metadata:     md,
-			MetadataMask: mdm,
-		})
-		if err != nil {
-			log.Errorf("Error creating policy flow {%+v}. Err: %v", polFlow, err)
-			return err
-		}
-
- 		polFlow.PopVlanPushMpls(rule.Sla)
- 		err = polFlow.Next(self.srmplsTable)
- 		if err != nil {
- 			log.Errorf("Error installing flow {%+v}. Err: %v", polFlow, err)
- 			return err
- 		}
- 		pRule := PolicyRule{
-			rule: rule,
-			flow: polFlow,
-		}
-		self.Rules[rule.RuleId] = &pRule
-		*/
 		polFlow1, err := self.policyTable.NewFlow(ofctrl.FlowMatch{
                         Priority: FLOW_MATCH_PRIORITY,
                         Ethertype:    0x0800,
@@ -504,7 +477,17 @@ func (self *PolicyAgent) AddRule(rule *OfnetPolicyRule, ret *bool) error {
                 }
 
                 //polFlow1.PushMpls(rule.Sla)
-		polFlow1.SetMetadata(rule.Sla,rule.Sla)
+		//sla1,_ := strconv.ParseUint(rule.Sla,0,64)
+		sla1 :=  uint64(0x900000000000)
+		if rule.Sla == "highest-bandwidth"{
+			sla1 =  uint64(0x900200000000)
+		} else if rule.Sla == "lowest-latency"{
+                        sla1 =  uint64(0x900000000000)
+		} else if rule.Sla == "secure-path"{
+                        sla1 =  uint64(0x900100000000)
+		}
+		//polFlow1.SetMetadata(uint64(rule.Sla),uint64(rule.Sla))
+		polFlow1.SetMetadata(sla1,sla1)
                 err = polFlow1.Next(self.srmplsTable)
                 if err != nil {
                         log.Errorf("Error installing flow {%+v}. Err: %v", polFlow1, err)
