@@ -551,7 +551,7 @@ func main() {
 		configureSyslog(opts.syslog)
 	}
 
-	if opts.fwdMode != "bridge" && opts.fwdMode != "routing" {
+	if opts.fwdMode != "bridge" && opts.fwdMode != "routing" && opts.fwdMode != "mpls" {
 		log.Fatalf("Invalid forwarding mode. Allowed modes are bridge,routing ")
 	}
 

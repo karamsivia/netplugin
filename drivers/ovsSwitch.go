@@ -73,6 +73,8 @@ func NewOvsSwitch(bridgeName, netType, localIP string, fwdMode string,
 			datapath = "vxlan"
 		case "routing":
 			datapath = "vrouter"
+		case "mpls":
+                        datapath = "vrouter"
 		default:
 			log.Errorf("Invalid datapath mode")
 			return nil, errors.New("Invalid forwarding mode. Expects 'bridge' or 'routing'")
@@ -85,6 +87,8 @@ func NewOvsSwitch(bridgeName, netType, localIP string, fwdMode string,
 			datapath = "vlan"
 		case "routing":
 			datapath = "vlrouter"
+		case "mpls":
+                        datapath = "mpls"
 		default:
 			log.Errorf("Invalid datapath mode")
 			return nil, errors.New("Invalid forwarding mode. Expects 'bridge' or 'routing'")
