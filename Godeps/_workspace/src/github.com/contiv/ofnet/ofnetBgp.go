@@ -29,6 +29,7 @@ import (
 	bgpconf "github.com/osrg/gobgp/config"
 	"github.com/osrg/gobgp/packet/bgp"
 	bgpserver "github.com/osrg/gobgp/server"
+//	cmd "github.com/osrg/gobgp/gobgp/cmd"
 	"github.com/shaleman/libOpenflow/openflow13"
 	"github.com/shaleman/libOpenflow/protocol"
 	"github.com/vishvananda/netlink"
@@ -107,7 +108,7 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	self.advPathCh = make(chan *api.Path, 16)
 
 	timeout := grpc.WithTimeout(time.Second)
-	conn, err := grpc.Dial("127.0.0.1:179", timeout, grpc.WithBlock(), grpc.WithInsecure())
+	conn, err := grpc.Dial("127.0.0.1:50051", timeout, grpc.WithBlock(), grpc.WithInsecure())
 	if err != nil {
 		log.Infof("GRPC timeout")
 		log.Fatal(err)
@@ -192,7 +193,18 @@ func (self *OfnetBgp) StartProtoServer(routerInfo *OfnetProtoRouterInfo) error {
 	setDefaultGlobalConfigValues(bgpGlobalCfg)
 	bgpGlobalCfg.Config.RouterId = self.routerIP
 	bgpGlobalCfg.Config.As = self.myBgpAs
-	self.bgpServer.SetGlobalType(*bgpGlobalCfg)
+	//self.bgpServer.SetGlobalType(*bgpGlobalCfg)
+        _ ,err2 := client.StartServer(context.Background(), &api.StartServerRequest{
+		Global: &api.Global{
+			As:              uint32(self.myBgpAs),
+			RouterId:        self.routerIP,
+			ListenPort:      int32(epreg.PortNo),
+			ListenAddresses: []string{self.routerIP},
+			MplsLabelMin:    uint32(16000),
+			MplsLabelMax:    uint32(1048575),
+		},
+	})
+	log.Info("BGP -StartServer ERR  %v" , err2)
 
 	self.advPathCh <- path
 	log.Infof("start monitoring ")
@@ -309,7 +321,8 @@ func (self *OfnetBgp) AddProtoNeighbor(neighborInfo *OfnetProtoNeighborInfo, loc
 
 	log.Infof("Received AddProtoNeighbor to Add bgp neighbor %v", neighborInfo.NeighborIP)
 
-	var policyConfig bgpconf.RoutingPolicy
+//	var policyConfig bgpconf.RoutingPolicy
+//	var policyConfig *bgpconf.BgpConfigSet
 	localAs, _ := strconv.Atoi(localas)
 	peerAs, _ := strconv.Atoi(neighborInfo.As)
 	p := &bgpconf.Neighbor{}
@@ -330,7 +343,13 @@ func (self *OfnetBgp) AddProtoNeighbor(neighborInfo *OfnetProtoNeighborInfo, loc
 	self.bgpServer.SetBmpConfig([]bgpconf.BmpServer{})
 
 	self.bgpServer.PeerAdd(*p)
-	self.bgpServer.SetRoutingPolicy(policyConfig)
+	//self.bgpServer.SetRoutingPolicy(policyConfig)
+	/*pol := bgpconf.ConfigSetToRoutingPolicy(policyConfig)
+	err1 := self.bgpServer.UpdatePolicy(*pol)
+	if err1 != nil {
+		log.Infof("failed to set routing policy: %s", err1)
+	}	
+	*/
 	epid := self.agent.getEndpointIdByIpVrf(net.ParseIP(neighborInfo.NeighborIP), "default")
 
 
@@ -388,26 +407,22 @@ func (self *OfnetBgp) AddLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error {
 		return nil
 	}
 
-        aspathParam := []bgp.AsPathParamInterface{bgp.NewAs4PathParam(2, []uint32{self.myBgpAs})}
-        aspath,_ := bgp.NewPathAttributeAsPath(aspathParam).Serialize()
 
 	path := &api.Path{
 		Pattrs: make([][]byte, 0),
-	//	SourceAsn: self.myBgpAs ,
+		SourceAsn: self.myBgpAs ,
 	}
+
+	 aspathParam := []bgp.AsPathParamInterface{bgp.NewAs4PathParam(2, []uint32{self.myBgpAs})}
+        aspath,_ := bgp.NewPathAttributeAsPath(aspathParam).Serialize()
+        path.Pattrs = append(path.Pattrs, aspath)
 
 	// form the path structure with appropriate path attributes
 	nlri := bgp.NewIPAddrPrefix(32, pathInfo.localEpIP)
 	path.Nlri, _ = nlri.Serialize()
 	origin, _ := bgp.NewPathAttributeOrigin(bgp.BGP_ORIGIN_ATTR_TYPE_EGP).Serialize()
 	path.Pattrs = append(path.Pattrs, origin)
-//	aspathParam := []bgp.AsPathParamInterface{bgp.NewAs4PathParam(2, []uint32{self.myBgpAs})}
-//	log.Infof("Received AddLocalProtoRoute aspathParam: %v", aspathParam)
-//	aspath,_ := bgp.NewPathAttributeAsPath(aspathParam).Serialize()
-	path.Pattrs = append(path.Pattrs, aspath)
 	log.Infof("Received AddLocalProtoRoute aspath: %v", aspath)
-	//n, _ := bgp.NewPathAttributeNextHop(pathInfo.nextHopIP).Serialize()
-	//NewLabeledVPNIPAddrPrefix
 	mpls, err := bgp.ParseMPLSLabelStack("3")
 	if err != nil {
 		return nil
@@ -424,18 +439,37 @@ func (self *OfnetBgp) AddLocalProtoRoute(pathInfo *OfnetProtoRouteInfo) error {
 		VrfId:          "default",
 		Path:     path,
 	}
-
+	log.Infof("BGP - arg %v " , arg)	
+	// add routes
+/*
+	prefix := pathInfo.localEpIP 
+	log.Infof("BGP - Prefix %v " , prefix )
+    	path2, err := cmd.ParsePath(bgp.RF_IPv4_MPLS, []string{"10.200.1.25/32", "3"})
+	log.Infof("BGP - Path2 %v " , path2 )
+	log.Infof("BGP - Err %v " , err )
+    	req := bgpserver.NewGrpcRequest(bgpserver.REQ_ADD_PATH, "", bgp.RouteFamily(0), &api.AddPathRequest{
+        	Resource: api.Resource_GLOBAL,
+        	Path:     path2,
+    	})
+    	self.bgpServer.GrpcReqCh <- req
+    	res := <-req.ResponseCh
+    	if err := res.Err(); err != nil {
+        	log.Fatal(err)
+		log.Infof("BGP - Err %v " , err)
+    	}
+*/
 	//send arguement stream
 	client := api.NewGobgpApiClient(self.cc)
 	if client == nil {
-		log.Errorf("Gobgpapi stream invalid")
+		log.Infof("Gobgpapi stream invalid")
 		return nil
 	}
 	stream ,err := client.AddPath(context.Background(), arg)
 	if err != nil {
-		log.Errorf("Fail to enforce Modpath: %v %v", err, stream)
+		log.Infof("Fail to enforce Modpath: %v %v", err, stream)
 		return err
 	}
+
 	return nil
 }
 
@@ -687,7 +721,7 @@ func createBgpServer() (bgpServer *bgpserver.BgpServer, grpcServer *bgpserver.Se
 		go bgpServer.Serve()
 	}
 	// start grpc Server
-	grpcServer = bgpserver.NewGrpcServer(":179", bgpServer.GrpcReqCh)
+	grpcServer = bgpserver.NewGrpcServer(":50051", bgpServer.GrpcReqCh)
 	if grpcServer == nil {
 		log.Errorf("Error creating bgp server")
 		return

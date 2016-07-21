@@ -465,7 +465,9 @@ func (self *PolicyAgent) AddRule(rule *OfnetPolicyRule, ret *bool) error {
 	} else if rule.Action == "sla" {  //SRTE Rule action
 
 		log.Infof("SLA is : %+v", rule.Sla)
-		polFlow1, err := self.policyTable.NewFlow(ofctrl.FlowMatch{
+		srmplsTable := self.ofSwitch.GetTable(SRMPLS_TBL_ID)
+		log.Infof("srmplsTable is : %+v", srmplsTable)
+		polFlow1, err := srmplsTable.NewFlow(ofctrl.FlowMatch{
                         Priority: FLOW_MATCH_PRIORITY,
                         Ethertype:    0x0800,
                         Metadata:     md,
@@ -488,7 +490,8 @@ func (self *PolicyAgent) AddRule(rule *OfnetPolicyRule, ret *bool) error {
 		}
 		//polFlow1.SetMetadata(uint64(rule.Sla),uint64(rule.Sla))
 		polFlow1.SetMetadata(sla1,sla1)
-                err = polFlow1.Next(self.srmplsTable)
+		ipTable := self.ofSwitch.GetTable(IP_TBL_ID)
+                err = polFlow1.Next(ipTable)
                 if err != nil {
                         log.Errorf("Error installing flow {%+v}. Err: %v", polFlow1, err)
                         return err
@@ -544,7 +547,7 @@ func (self *PolicyAgent) InitTables(nextTblId uint8) error {
 	// Create all tables
 	self.dstGrpTable, _ = sw.NewTable(DST_GRP_TBL_ID)
 	self.policyTable, _ = sw.NewTable(POLICY_TBL_ID)
-	self.srmplsTable, _ = sw.NewTable(SRMPLS_TBL_ID)   //SRTE
+	//self.srmplsTable, _ = sw.NewTable(SRMPLS_TBL_ID)   //SRTE
 	
  
 

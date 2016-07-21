@@ -90,7 +90,7 @@ type EndpointInfo struct {
 	Vrf               string
 	EndpointGroupVlan uint16
 }
-
+const FLOW_HIGH_PRIORITY = 120
 const FLOW_MATCH_PRIORITY = 100        // Priority for all match flows
 const FLOW_FLOOD_PRIORITY = 10         // Priority for flood entries
 const FLOW_MISS_PRIORITY = 1           // priority for table miss flow
@@ -170,6 +170,11 @@ func NewOfnetAgent(bridgeName string, dpName string, localIp net.IP, rpcPort uin
 		agent.fwdMode = "routing"
 		agent.ovsDriver = ovsdbDriver.NewOvsDriver(bridgeName)
 		agent.protopath = NewOfnetBgp(agent, routerInfo)
+	case "mpls":
+                agent.datapath = NewMpls(agent, rpcServ)
+                agent.fwdMode = "routing"
+                agent.ovsDriver = ovsdbDriver.NewOvsDriver(bridgeName)
+                agent.protopath = NewOfnetBgp(agent, routerInfo)
 
 	default:
 		log.Fatalf("Unknown Datapath %s", dpName)
@@ -543,7 +548,7 @@ func (self *OfnetAgent) AddNetwork(vlanId uint16, vni uint32, Gw string, Vrf str
 	vrf := self.vlanVrf[vlanId]
 	gwEpid := self.getEndpointIdByIpVrf(net.ParseIP(Gw), *vrf)
 
-	if Gw != "" && self.fwdMode == "routing" {
+	if Gw != "" && (self.fwdMode == "routing" || self.fwdMode == "mpls") {
 		// Call the datapath
 		epreg := &OfnetEndpoint{
 			EndpointID:   gwEpid,

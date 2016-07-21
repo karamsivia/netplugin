@@ -52,6 +52,7 @@ type Vrouter struct {
 	inputTable *ofctrl.Table // Packet lookup starts here
 	vlanTable  *ofctrl.Table // Vlan Table. map port or VNI to vlan
 	ipTable    *ofctrl.Table // IP lookup table
+	srmplsTable *ofctrl.Table 
 
 	// Flow Database
 	flowDb         map[string]*ofctrl.Flow // Database of flow entries
@@ -799,6 +800,7 @@ func (self *Vrouter) initFgraph() error {
 	self.inputTable = sw.DefaultTable()
 	self.vlanTable, _ = sw.NewTable(VLAN_TBL_ID)
 	self.ipTable, _ = sw.NewTable(IP_TBL_ID)
+	self.srmplsTable, _ = sw.NewTable(SRMPLS_TBL_ID)
 
 	// setup SNAT table
 	// Matches in SNAT table (i.e. incoming) go to IP look up
