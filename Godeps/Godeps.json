@@ -75,23 +75,23 @@
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet",
-			"Rev": "19a9dff0b82fde3fdc08cd399094988ec6999662"
+			"Rev": "dddb5cad447007d5d38f77e37ecc2d59f07c618b"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/ofctrl",
-			"Rev": "19a9dff0b82fde3fdc08cd399094988ec6999662"
+			"Rev": "dddb5cad447007d5d38f77e37ecc2d59f07c618b"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/ovsdbDriver",
-			"Rev": "19a9dff0b82fde3fdc08cd399094988ec6999662"
+			"Rev": "dddb5cad447007d5d38f77e37ecc2d59f07c618b"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/pqueue",
-			"Rev": "19a9dff0b82fde3fdc08cd399094988ec6999662"
+			"Rev": "dddb5cad447007d5d38f77e37ecc2d59f07c618b"
 		},
 		{
 			"ImportPath": "github.com/contiv/ofnet/rpcHub",
-			"Rev": "19a9dff0b82fde3fdc08cd399094988ec6999662"
+			"Rev": "dddb5cad447007d5d38f77e37ecc2d59f07c618b"
 		},
 		{
 			"ImportPath": "github.com/contiv/systemtests-utils",

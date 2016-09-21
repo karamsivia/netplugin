@@ -32,9 +32,11 @@ import (
 	"net"
 	"net/rpc"
 	"strings"
+	"strconv"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/contiv/ofnet/ofctrl"
+	bmp "github.com/contiv/ofnet/bmp"
 	"github.com/shaleman/libOpenflow/openflow13"
 	"github.com/shaleman/libOpenflow/protocol"
 )
@@ -45,6 +47,7 @@ type Mpls struct {
 	agent       *OfnetAgent      // Pointer back to ofnet agent that owns this
 	ofSwitch    *ofctrl.OFSwitch // openflow switch we are talking to
 	policyAgent *PolicyAgent     // Policy agent
+	ofnetBgp    *OfnetBgp
 
 	// Fgraph tables
 	inputTable *ofctrl.Table // Packet lookup starts here
@@ -497,14 +500,37 @@ func (self *Mpls) AddEndpoint(endpoint *OfnetEndpoint) error {
 	self.AddMplsEndpoint(endpoint)
 	return nil
 }
-
 func (self *Mpls) AddMplsEndpoint(endpoint *OfnetEndpoint) error {
-	var hbLabels [3]uint32
-	hbLabels[0] =  uint32( 16005 )
-hbLabels[1] =  uint32( 16006 )
-hbLabels[2] =  uint32( 16007 )
-	md := uint64(0x900200000000)
-	mdmask:= uint64(0xffff00000000)
+	 md := uint64(0x900200000000)
+        mdmask:= uint64(0x900200000000)
+	sla :=  "high-bandwidth"
+	self.AddMpls(md, mdmask , sla, endpoint)
+        md = uint64(0x900100000000)
+        mdmask = uint64(0x900100000000)
+        sla =  "secure-path"
+        self.AddMpls(md, mdmask , sla , endpoint)
+        md = uint64(0x900000000000)
+        mdmask = uint64(0x900000000000)
+        sla =  "low-latency"
+        self.AddMpls(md, mdmask , sla ,endpoint)
+
+	
+        return nil
+
+}
+func (self *Mpls) AddMpls(md uint64 , mdmask  uint64, sla string , endpoint *OfnetEndpoint) error {
+	//var hbLabels [3]uint32
+	//hbLabels[0] =  uint32( 16005 )
+	//hbLabels[1] =  uint32( 16006 )
+	//hbLabels[2] =  uint32( 16007 )
+	//md := uint64(0x900200000000)
+	//mdmask:= uint64(0xffff00000000)
+	//routerInfo := mpls.ofnetBgp.GetRouterInfo()
+	//routerIP, _, _ = ParseCIDR(routerInfo.RouterIP)
+	routerIP :=	self.agent.GetRouterInfo().RouterIP
+	log.Infof("routerIP %v, string(endpoint.IpAddr) %v , sla %v" , routerIP , endpoint.IpAddr , sla)
+	labels := bmp.Get_epe_label_SR( routerIP, endpoint.IpAddr.String() , sla)
+	log.Infof("SR label stack %v" , labels )
 	//hbLabels = self.listener.GetLabels( endpoint.IpAddr , "highest-bandwidth" )
 	 outPort, err := self.ofSwitch.OutputPort(endpoint.PortNo)
         if err != nil {
@@ -528,8 +554,11 @@ hbLabels[2] =  uint32( 16007 )
         DAMac, _ := net.ParseMAC(endpoint.MacAddrStr)
         ipFlow.SetMacDa(DAMac)
         ipFlow.SetMacSa(self.myRouterMac)
-	for i := 0; i < len(hbLabels); i++ {
-		ipFlow.PushMpls(hbLabels[i])
+	//for i := 0; i < len(labels); i++ {
+	for _, i := range labels {
+		hbLabel,_  := strconv.ParseInt(i,10,32)
+		hb := uint32(hbLabel)
+		ipFlow.PushMpls(hb)
         }
         // Point it to output port
         err = ipFlow.Next(outPort)
@@ -537,6 +566,7 @@ hbLabels[2] =  uint32( 16007 )
                 log.Errorf("Error installing flow for endpoint: %+v. Err: %v", endpoint, err)
                 return err
         }
+	
 
         //0x900200000000/0xffff00000000
 	return nil
