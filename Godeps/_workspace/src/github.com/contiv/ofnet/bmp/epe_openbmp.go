@@ -295,7 +295,7 @@ func Epe_label_SR(source, target, ver_sla string) (bool, []string) {
         log.Infof("BMP host %v",bmp_agent)
          bmp_port := "8001"
         url_rib := "http://" + bmp_agent + ":" + bmp_port + "/db_rest/v1/rib"
-        url_links := "http://" + bmp_agent + ":" + bmp_port + "/db_rest/v1/linkstate/links/epe"
+        url_links := "http://" + bmp_agent + ":" + bmp_port + "/db_rest/v1/linkstate/epe"
         url_routers := "http://" + bmp_agent + ":" + bmp_port + "/db_rest/v1/routers"
 
 	te_sla := map[string]string{
